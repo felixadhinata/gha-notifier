@@ -1,0 +1,3 @@
+# For scripts/render-tray-icons.py (generate PNGs from SVGs)
+Pillow>=9.0.0
+cairosvg>=2.7.0
