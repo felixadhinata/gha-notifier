@@ -31,18 +31,28 @@ BRANCH_REFRESH_LOADING_KEY = "__refresh__"
 _runs_cache = {}
 
 
+class _UI:
+    """Holds widget refs and loading state owned by this tab. Set during build_branches_workflows_tab()."""
+    branch_listbox = None
+    branch_listbox_scroll = None
+    branch_filter_entry = None
+    branches_section_spinner = None
+    branches_section_label = None
+    workflows_container = None
+    workflows_header_content = None
+    workflows_section_spinner = None
+    workflows_refresh_btn = None
+    workflows_settings_btn = None
+    workflows_loading_count = 0
+    selected_branch = None
+
+_ui = _UI()
+
+
 def refresh_branches():
     """Refresh branch data in background; store update and post-update UI run on main thread. branch_service runs refresh_watches when apply finishes."""
-    filter_q = (store.branch_filter_entry.get_text() or "").strip().lower()
-    refresh_branch_list(
-        store.config,
-        store.client,
-        store.pr_to_branch,
-        store.pr_branches_loading,
-        filter_q,
-        on_fetch_done=_after_pr_fetch,
-        apply_on_main=True,
-    )
+    filter_q = (_ui.branch_filter_entry.get_text() or "").strip().lower()
+    refresh_branch_list(filter_q, on_fetch_done=_after_pr_fetch, apply_on_main=True)
     GLib.idle_add(_after_refresh_branches)
 
 
@@ -54,22 +64,15 @@ def _after_refresh_branches():
     refresh_workflows_for_selection()
 
 
+
 def refresh_branch_list_from_poll():
     """Called by pollers every 30s: refresh branch list (with API) in a thread, then refill UI on main thread."""
     filter_q = ""
-    if getattr(store, "branch_filter_entry", None) and store.branch_filter_entry:
-        filter_q = (store.branch_filter_entry.get_text() or "").strip().lower()
+    if _ui.branch_filter_entry:
+        filter_q = (_ui.branch_filter_entry.get_text() or "").strip().lower()
 
     def _run():
-        refresh_branch_list(
-            store.config,
-            store.client,
-            store.pr_to_branch,
-            store.pr_branches_loading,
-            filter_q,
-            on_fetch_done=_after_pr_fetch,
-            apply_on_main=True,
-        )
+        refresh_branch_list(filter_q, on_fetch_done=_after_pr_fetch, apply_on_main=True)
 
     threading.Thread(target=_run, daemon=True).start()
 
@@ -77,7 +80,7 @@ def refresh_branch_list_from_poll():
 def refresh_watch_workflows(on_after_refresh=None):
     """Run watch fetch in background; fill store and optional on_after_refresh on main thread (never blocks UI)."""
     def worker():
-        effective_watches, runs_by_key = _refresh_watches_fetch(store.config, store.client)
+        effective_watches, runs_by_key = _refresh_watches_fetch()
 
         def on_main():
             from tabs.watches import fill_watches_store
@@ -130,18 +133,18 @@ def _on_refresh_branches():
 
 def _on_refresh_workflows():
     """Reload workflow runs for the selected branch. Used by the Workflows refresh button."""
-    if store.selected_branch is None:
+    if _ui.selected_branch is None:
         return
-    repo_key, branch_name = store.selected_branch
+    repo_key, branch_name = _ui.selected_branch
     _runs_cache.pop(f"{repo_key}:{branch_name}", None)
     refresh_workflows_for_selection()
 
 
 def _on_workflows_settings_clicked():
     """Open workflow auto-watch settings for the selected branch. Used by the Workflows settings button."""
-    if store.selected_branch is None:
+    if _ui.selected_branch is None:
         return
-    repo_key, branch_name = store.selected_branch
+    repo_key, branch_name = _ui.selected_branch
     dialog = WorkflowBranchSettingsDialog(store.window, repo_key, branch_name)
     response = run_dialog_modal(dialog)
     if response == Gtk.ResponseType.OK:
@@ -184,21 +187,21 @@ def fetch_runs(owner, repo, branch):
 def update_branches_header_loading():
     """Show/hide branches section spinner based on store.pr_branches_loading."""
     if store.pr_branches_loading:
-        store.branches_section_spinner.set_visible(True)
-        store.branches_section_spinner.start()
+        _ui.branches_section_spinner.set_visible(True)
+        _ui.branches_section_spinner.start()
     else:
-        store.branches_section_spinner.stop()
-        store.branches_section_spinner.set_visible(False)
+        _ui.branches_section_spinner.stop()
+        _ui.branches_section_spinner.set_visible(False)
 
 
 def update_workflows_header_loading():
-    """Show/hide workflows section spinner based on store._workflows_loading_count."""
-    if store._workflows_loading_count > 0:
-        store.workflows_section_spinner.set_visible(True)
-        store.workflows_section_spinner.start()
+    """Show/hide workflows section spinner based on _ui.workflows_loading_count."""
+    if _ui.workflows_loading_count > 0:
+        _ui.workflows_section_spinner.set_visible(True)
+        _ui.workflows_section_spinner.start()
     else:
-        store.workflows_section_spinner.stop()
-        store.workflows_section_spinner.set_visible(False)
+        _ui.workflows_section_spinner.stop()
+        _ui.workflows_section_spinner.set_visible(False)
 
 
 def _after_pr_fetch(repo_key):
@@ -208,16 +211,9 @@ def _after_pr_fetch(repo_key):
 
 
 def render_branches_list():
-    """Rebuild store.branch_list from branch_service (no API refresh); start PR fetch for auto-add repos if needed."""
-    filter_q = (store.branch_filter_entry.get_text() or "").strip().lower()
-    refresh_branch_list(
-        store.config,
-        None,
-        store.pr_to_branch,
-        store.pr_branches_loading,
-        filter_q,
-        on_fetch_done=_after_pr_fetch,
-    )
+    """Rebuild store.branch_list from cached data (no API refresh); start PR fetch for auto-add repos if needed."""
+    filter_q = (_ui.branch_filter_entry.get_text() or "").strip().lower() if _ui.branch_filter_entry else ""
+    refresh_branch_list(filter_q, on_fetch_done=_after_pr_fetch)
     update_branches_header_loading()
     refill_branch_list()
     refresh_workflows_for_selection()
@@ -234,7 +230,7 @@ def _on_branch_row_activated(listbox, row):
     if not branch_name:
         listbox.unselect_row(row)
         return
-    store.selected_branch = (repo_key, branch_name)
+    _ui.selected_branch = (repo_key, branch_name)
     refresh_workflows_for_selection()
 
 
@@ -242,7 +238,7 @@ def _workflows_show_placeholder():
     """Show 'Select a branch' placeholder in workflows panel."""
     lbl = Gtk.Label()
     lbl.set_markup("<b>Workflows</b>")
-    store.workflows_header_content.append(lbl)
+    _ui.workflows_header_content.append(lbl)
     placeholder = Gtk.Label(label="Select a branch above to see workflow runs.")
     placeholder.set_halign(Gtk.Align.CENTER)
     placeholder.set_valign(Gtk.Align.CENTER)
@@ -252,7 +248,7 @@ def _workflows_show_placeholder():
     center.set_hexpand(True)
     center.set_vexpand(True)
     center.append(placeholder)
-    store.workflows_container.append(center)
+    _ui.workflows_container.append(center)
 
 
 def _workflows_show_loading(repo_key, branch_name):
@@ -260,14 +256,14 @@ def _workflows_show_loading(repo_key, branch_name):
     sel = f"{repo_key} — {branch_name}".replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     lbl = Gtk.Label()
     lbl.set_markup(f"<b>Workflows</b> ({sel}")
-    store.workflows_header_content.append(lbl)
+    _ui.workflows_header_content.append(lbl)
     repo_ptb = store.pr_to_branch.get(repo_key) or {}
     pr_num = next((n for n, b in repo_ptb.items() if b == branch_name), None)
     if pr_num:
         link = Gtk.LinkButton(uri=f"https://github.com/{repo_key}/pull/{pr_num}", label=f" #{pr_num}")
         link.set_halign(Gtk.Align.START)
-        store.workflows_header_content.append(link)
-    store.workflows_header_content.append(Gtk.Label(label=")"))
+        _ui.workflows_header_content.append(link)
+    _ui.workflows_header_content.append(Gtk.Label(label=")"))
     loading_lbl = Gtk.Label(label="Loading…")
     loading_lbl.set_halign(Gtk.Align.CENTER)
     loading_lbl.set_valign(Gtk.Align.CENTER)
@@ -277,40 +273,40 @@ def _workflows_show_loading(repo_key, branch_name):
     loading_box.set_hexpand(True)
     loading_box.set_vexpand(True)
     loading_box.append(loading_lbl)
-    store.workflows_container.append(loading_box)
-    store._workflows_loading_count += 1
+    _ui.workflows_container.append(loading_box)
+    _ui.workflows_loading_count += 1
     GLib.idle_add(update_workflows_header_loading)
     return repo_key.split("/", 1)
 
 
 def _workflows_show_result(repo_key, branch_name, runs):
     """On main thread: replace loading with empty message or workflow table."""
-    store._workflows_loading_count = max(0, store._workflows_loading_count - 1)
+    _ui.workflows_loading_count = max(0, _ui.workflows_loading_count - 1)
     update_workflows_header_loading()
-    clear_box(store.workflows_container)
+    clear_box(_ui.workflows_container)
     if not runs:
         empty = Gtk.Label(label="No workflow runs found.")
         empty.set_xalign(0)
-        store.workflows_container.append(empty)
+        _ui.workflows_container.append(empty)
     else:
         apply_auto_watches(store.config, repo_key, branch_name, runs, on_changed=store.update_tray_menu)
         grid = build_workflows_table(repo_key, branch_name, runs, get_all_watches(store.config))
-        store.workflows_container.append(grid)
+        _ui.workflows_container.append(grid)
         grid.set_hexpand(True)
         grid.set_vexpand(True)
 
 
 def refresh_workflows_for_selection():
     """Update the workflows panel for the current branch selection (placeholder or load runs)."""
-    clear_box(store.workflows_container)
-    enabled = store.selected_branch is not None
-    store.workflows_refresh_btn.set_sensitive(enabled)
-    store.workflows_settings_btn.set_sensitive(enabled)
-    clear_box(store.workflows_header_content)
-    if store.selected_branch is None:
+    clear_box(_ui.workflows_container)
+    enabled = _ui.selected_branch is not None
+    _ui.workflows_refresh_btn.set_sensitive(enabled)
+    _ui.workflows_settings_btn.set_sensitive(enabled)
+    clear_box(_ui.workflows_header_content)
+    if _ui.selected_branch is None:
         _workflows_show_placeholder()
         return
-    repo_key, branch_name = store.selected_branch
+    repo_key, branch_name = _ui.selected_branch
     owner, repo = _workflows_show_loading(repo_key, branch_name)
 
     def worker():
@@ -321,7 +317,7 @@ def refresh_workflows_for_selection():
 
 
 def build_branches_workflows_tab():
-    """Build the 'Branches & Workflows' tab content. Sets widget refs on store."""
+    """Build the 'Branches & Workflows' tab content. Sets widget refs on _ui."""
     tab1_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
 
     # --- Branches section ---
@@ -331,14 +327,14 @@ def build_branches_workflows_tab():
     branches_inner.set_margin_top(4)
     branches_inner.set_margin_bottom(8)
     branches_header_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-    store.branches_section_label = Gtk.Label()
-    store.branches_section_label.set_markup("<b>Branches</b>")
-    store.branches_section_label.set_halign(Gtk.Align.START)
-    store.branches_section_spinner = Gtk.Spinner()
+    _ui.branches_section_label = Gtk.Label()
+    _ui.branches_section_label.set_markup("<b>Branches</b>")
+    _ui.branches_section_label.set_halign(Gtk.Align.START)
+    _ui.branches_section_spinner = Gtk.Spinner()
     spacer = Gtk.Box()
     spacer.set_hexpand(True)
-    branches_header_row.append(store.branches_section_label)
-    branches_header_row.append(store.branches_section_spinner)
+    branches_header_row.append(_ui.branches_section_label)
+    branches_header_row.append(_ui.branches_section_spinner)
     branches_header_row.append(spacer)
     manage_btn = Gtk.Button(label="Add / Delete branch")
     manage_btn.connect("clicked", lambda *a: _on_manage_branches())
@@ -350,24 +346,24 @@ def build_branches_workflows_tab():
     branches_header_row.append(manage_btn)
     branches_inner.append(branches_header_row)
 
-    store.branch_filter_entry = Gtk.SearchEntry(placeholder_text="Filter branches…")
-    store.branch_filter_entry.connect("search-changed", lambda e: render_branches_list())
-    branches_inner.append(store.branch_filter_entry)
+    _ui.branch_filter_entry = Gtk.SearchEntry(placeholder_text="Filter branches…")
+    _ui.branch_filter_entry.connect("search-changed", lambda e: render_branches_list())
+    branches_inner.append(_ui.branch_filter_entry)
 
-    store.branch_listbox = Gtk.ListBox()
-    store.branch_listbox.set_size_request(-1, 320)
-    store.branch_listbox.add_css_class("navigation-sidebar")
-    store.branch_listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
-    store.branch_listbox.connect(
+    _ui.branch_listbox = Gtk.ListBox()
+    _ui.branch_listbox.set_size_request(-1, 320)
+    _ui.branch_listbox.add_css_class("navigation-sidebar")
+    _ui.branch_listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
+    _ui.branch_listbox.connect(
         "row-activated",
         lambda lb, r: _on_branch_row_activated(lb, r),
     )
-    store._branch_listbox_scroll = Gtk.ScrolledWindow()
-    store._branch_listbox_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-    store._branch_listbox_scroll.set_child(store.branch_listbox)
-    store._branch_listbox_scroll.set_vexpand(True)
+    _ui.branch_listbox_scroll = Gtk.ScrolledWindow()
+    _ui.branch_listbox_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    _ui.branch_listbox_scroll.set_child(_ui.branch_listbox)
+    _ui.branch_listbox_scroll.set_vexpand(True)
     branch_list_frame = Gtk.Frame()
-    branch_list_frame.set_child(store._branch_listbox_scroll)
+    branch_list_frame.set_child(_ui.branch_listbox_scroll)
     branch_list_frame.set_vexpand(True)
     branches_inner.append(branch_list_frame)
     tab1_box.append(branches_inner)
@@ -381,33 +377,33 @@ def build_branches_workflows_tab():
     workflows_inner.set_margin_top(4)
     workflows_inner.set_margin_bottom(8)
     workflows_header_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-    store.workflows_header_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-    store.workflows_header_content.append(Gtk.Label())
-    store.workflows_section_spinner = Gtk.Spinner()
+    _ui.workflows_header_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+    _ui.workflows_header_content.append(Gtk.Label())
+    _ui.workflows_section_spinner = Gtk.Spinner()
     spacer2 = Gtk.Box()
     spacer2.set_hexpand(True)
-    workflows_header_row.append(store.workflows_header_content)
-    workflows_header_row.append(store.workflows_section_spinner)
+    workflows_header_row.append(_ui.workflows_header_content)
+    workflows_header_row.append(_ui.workflows_section_spinner)
     workflows_header_row.append(spacer2)
-    store.workflows_refresh_btn = Gtk.Button()
-    store.workflows_refresh_btn.set_child(Gtk.Image.new_from_icon_name("view-refresh-symbolic"))
-    store.workflows_refresh_btn.set_tooltip_text("Refresh workflows")
-    store.workflows_refresh_btn.connect("clicked", lambda *a: _on_refresh_workflows())
-    store.workflows_refresh_btn.set_sensitive(False)
-    workflows_header_row.append(store.workflows_refresh_btn)
-    store.workflows_settings_btn = Gtk.Button()
-    store.workflows_settings_btn.set_child(Gtk.Image.new_from_icon_name("preferences-other-symbolic"))
-    store.workflows_settings_btn.set_tooltip_text("Workflow settings for this branch")
-    store.workflows_settings_btn.connect("clicked", lambda *a: _on_workflows_settings_clicked())
-    store.workflows_settings_btn.set_sensitive(False)
-    workflows_header_row.append(store.workflows_settings_btn)
+    _ui.workflows_refresh_btn = Gtk.Button()
+    _ui.workflows_refresh_btn.set_child(Gtk.Image.new_from_icon_name("view-refresh-symbolic"))
+    _ui.workflows_refresh_btn.set_tooltip_text("Refresh workflows")
+    _ui.workflows_refresh_btn.connect("clicked", lambda *a: _on_refresh_workflows())
+    _ui.workflows_refresh_btn.set_sensitive(False)
+    workflows_header_row.append(_ui.workflows_refresh_btn)
+    _ui.workflows_settings_btn = Gtk.Button()
+    _ui.workflows_settings_btn.set_child(Gtk.Image.new_from_icon_name("preferences-other-symbolic"))
+    _ui.workflows_settings_btn.set_tooltip_text("Workflow settings for this branch")
+    _ui.workflows_settings_btn.connect("clicked", lambda *a: _on_workflows_settings_clicked())
+    _ui.workflows_settings_btn.set_sensitive(False)
+    workflows_header_row.append(_ui.workflows_settings_btn)
     workflows_inner.append(workflows_header_row)
 
-    store.workflows_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    _ui.workflows_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
     scroll_workflows = Gtk.ScrolledWindow()
     scroll_workflows.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
     scroll_workflows.set_min_content_height(180)
-    scroll_workflows.set_child(store.workflows_container)
+    scroll_workflows.set_child(_ui.workflows_container)
     scroll_workflows.set_vexpand(True)
     workflow_table_frame = Gtk.Frame()
     workflow_table_frame.set_child(scroll_workflows)
@@ -417,8 +413,8 @@ def build_branches_workflows_tab():
     workflows_inner.set_hexpand(True)
     workflows_inner.set_vexpand(True)
 
-    store.branches_section_spinner.set_visible(False)
-    store.workflows_section_spinner.set_visible(False)
+    _ui.branches_section_spinner.set_visible(False)
+    _ui.workflows_section_spinner.set_visible(False)
     return tab1_box
 
 
@@ -449,13 +445,13 @@ def refill_branch_list():
             lbl.set_label(display)
         row.set_child(lbl)
         new_listbox.append(row)
-    store._branch_listbox_scroll.set_child(new_listbox)
-    store.branch_listbox = new_listbox
-    if store.selected_branch:
-        repo_key, branch_name = store.selected_branch
+    _ui.branch_listbox_scroll.set_child(new_listbox)
+    _ui.branch_listbox = new_listbox
+    if _ui.selected_branch:
+        repo_key, branch_name = _ui.selected_branch
         for i, (_, r, b) in enumerate(store.branch_list):
             if r == repo_key and b == branch_name:
-                store.branch_listbox.select_row(store.branch_listbox.get_row_at_index(i))
+                _ui.branch_listbox.select_row(_ui.branch_listbox.get_row_at_index(i))
                 break
 
 

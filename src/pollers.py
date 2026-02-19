@@ -53,11 +53,7 @@ class PollerManager:
         def on_done():
             self.is_polling = False
             log("poll: watch status — done")
-        refresh_watch_status(
-            store.client,
-            fetch_list=fetch_list,
-            on_done=on_done,
-        )
+        refresh_watch_status(fetch_list=fetch_list, on_done=on_done)
 
     def branch_list_poll_once(self):
         """Refresh branch list (default 30s). Returns True to keep the timeout active."""

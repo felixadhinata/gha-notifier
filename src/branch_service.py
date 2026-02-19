@@ -47,13 +47,15 @@ def fetch_pr_branches_for_repo(client, login, owner, repo_name, branch_to_pr, pr
     return branch_to_pr, pr_to_branch
 
 
-def fetch_pr_branches_worker(repo_key, config, client, pr_to_branch, on_done=None):
-    """Load PR branch names for one repo in a background thread. Calls on_done() when finished."""
+def fetch_pr_branches_worker(repo_key, on_done=None):
+    """Load PR branch names for one repo in a background thread. Reads config/client/pr_to_branch from store."""
+    import store
+
     def finish():
         if on_done:
             on_done()
 
-    if not client or not config:
+    if not store.client or not store.config:
         finish()
         return
     parts = repo_key.split("/", 1)
@@ -61,17 +63,16 @@ def fetch_pr_branches_worker(repo_key, config, client, pr_to_branch, on_done=Non
         finish()
         return
     owner, repo_name = parts[0], parts[1]
-    login = (config.get("user") or {}).get("login")
-    if not login or not client.token:
+    login = (store.config.get("user") or {}).get("login")
+    if not login or not store.client.token:
         finish()
         return
-    repo_ptb = dict((pr_to_branch or {}).get(repo_key) or {})
+    repo_ptb = dict((store.pr_to_branch or {}).get(repo_key) or {})
     branch_to_pr = {b: {"pr_number": n} for n, b in repo_ptb.items()}
     branch_to_pr, repo_ptb = fetch_pr_branches_for_repo(
-        client, login, owner, repo_name, branch_to_pr, repo_ptb
+        store.client, login, owner, repo_name, branch_to_pr, repo_ptb
     )
-    if pr_to_branch is not None:
-        pr_to_branch[repo_key] = repo_ptb
+    store.pr_to_branch[repo_key] = repo_ptb
     finish()
 
 
@@ -89,11 +90,10 @@ def _branch_list_data(config, pr_to_branch):
 
 def _refresh_watches_after_branch_list():
     """Run in background: fetch watches then fill store on main thread. Call after branch list apply finishes."""
-    import store
     from tabs.watches import fill_watches_store
 
     def worker():
-        effective_watches, runs_by_key = _refresh_watches_fetch(store.config, store.client)
+        effective_watches, runs_by_key = _refresh_watches_fetch()
         GLib.idle_add(lambda ef=effective_watches, rbk=runs_by_key: fill_watches_store(ef, rbk))
 
     threading.Thread(target=worker, daemon=True).start()
@@ -104,23 +104,20 @@ def _pr_fetch_done_cb(repo_key, on_fetch_done):
     return (lambda: GLib.idle_add(on_fetch_done, repo_key)) if on_fetch_done else None
 
 
-def _apply_branch_list_result(rows, ptb, new_auto_watches, repos_to_fetch, config, pr_to_branch_ref,
-                              pr_branches_loading, client, on_fetch_done):
+def _apply_branch_list_result(rows, ptb, new_auto_watches, repos_to_fetch, on_fetch_done=None):
     """Run on main thread: apply branch list and config, start PR fetch workers, then refresh watches."""
     import store
-    if pr_to_branch_ref is not None:
-        pr_to_branch_ref.clear()
-        pr_to_branch_ref.update(ptb)
+    store.pr_to_branch.clear()
+    store.pr_to_branch.update(ptb)
     store.branch_list.clear()
     store.branch_list.extend(rows)
-    config["autoWatches"] = new_auto_watches
-    threading.Thread(target=lambda: save_config(config), daemon=True).start()
+    store.config["autoWatches"] = new_auto_watches
+    threading.Thread(target=lambda: save_config(store.config), daemon=True).start()
     for repo_key in repos_to_fetch:
-        if pr_branches_loading is not None:
-            pr_branches_loading.add(repo_key)
+        store.pr_branches_loading.add(repo_key)
         threading.Thread(
             target=fetch_pr_branches_worker,
-            args=(repo_key, config, client, pr_to_branch_ref, _pr_fetch_done_cb(repo_key, on_fetch_done)),
+            args=(repo_key, _pr_fetch_done_cb(repo_key, on_fetch_done)),
             daemon=True,
         ).start()
     _refresh_watches_after_branch_list()
@@ -191,48 +188,40 @@ def _build_branch_rows(config, ptb, pr_branches_loading, filter_q):
     return rows, new_auto_watches, repos_to_fetch
 
 
-def refresh_branch_list(config, client, pr_to_branch, pr_branches_loading, filter_q, on_fetch_done=None, apply_on_main=False):
+def refresh_branch_list(filter_q, on_fetch_done=None, apply_on_main=False):
     """
-    Refresh PR data for auto-add repos, build branch list, update store. When apply_on_main=True
-    schedules apply on main thread; when apply finishes, refresh_watches runs.
+    Refresh PR data for auto-add repos, build branch list, update store.
+    Reads config, client, pr_to_branch, pr_branches_loading from store.
+    When apply_on_main=True schedules apply on main thread (call from a background thread);
+    when False applies immediately (call from main thread, no API calls made).
     """
     import store
-    ptb = dict(pr_to_branch) if pr_to_branch is not None else {}
-    if client and client.token:
-        ptb, new_auto_pruned = _refresh_ptb_for_auto_add(config, client, ptb)
-        if not apply_on_main and new_auto_pruned != (config.get("autoWatches") or []):
-            config["autoWatches"] = new_auto_pruned
-            save_config(config)
+    ptb = dict(store.pr_to_branch) if store.pr_to_branch is not None else {}
+    if apply_on_main and store.client and store.client.token:
+        ptb, new_auto_pruned = _refresh_ptb_for_auto_add(store.config, store.client, ptb)
+        if new_auto_pruned != (store.config.get("autoWatches") or []):
+            store.config["autoWatches"] = new_auto_pruned
 
-    rows, new_auto_watches, repos_to_fetch = _build_branch_rows(config, ptb, pr_branches_loading, filter_q)
+    rows, new_auto_watches, repos_to_fetch = _build_branch_rows(store.config, ptb, store.pr_branches_loading, filter_q)
 
     if apply_on_main:
-        GLib.idle_add(
-            _apply_branch_list_result,
-            rows, ptb, new_auto_watches, repos_to_fetch, config,
-            pr_to_branch, pr_branches_loading, client, on_fetch_done,
-        )
+        GLib.idle_add(lambda: _apply_branch_list_result(rows, ptb, new_auto_watches, repos_to_fetch, on_fetch_done))
         return
 
+    # Sync path: main thread, no API calls, apply immediately
     store.branch_list.clear()
     store.branch_list.extend(rows)
-    if pr_to_branch is not None:
-        pr_to_branch.clear()
-        pr_to_branch.update(ptb)
-    config["autoWatches"] = new_auto_watches
-    save_config(config)
+    store.pr_to_branch.clear()
+    store.pr_to_branch.update(ptb)
+    store.config["autoWatches"] = new_auto_watches
+    save_config(store.config)
     for repo_key in repos_to_fetch:
-        if pr_branches_loading is not None:
-            pr_branches_loading.add(repo_key)
+        store.pr_branches_loading.add(repo_key)
         threading.Thread(
             target=fetch_pr_branches_worker,
-            args=(repo_key, config, client, pr_to_branch, _pr_fetch_done_cb(repo_key, on_fetch_done)),
+            args=(repo_key, _pr_fetch_done_cb(repo_key, on_fetch_done)),
             daemon=True,
         ).start()
-    # Only refresh watches when we actually refreshed branch data (had API client). Avoids storm when
-    # render_branches_list() is called from filter "search-changed" (client=None).
-    if client is not None:
-        _refresh_watches_after_branch_list()
 
 
 def _fetch_run_by_id(client, repo_key, run_id):
@@ -247,11 +236,11 @@ def _fetch_run_by_id(client, repo_key, run_id):
         return None, None
 
 
-def refresh_watch_status(client, fetch_list=None, on_done=None):
+def refresh_watch_status(fetch_list=None, on_done=None):
     """Fetch each run by run_id, then update store rows on main thread. Call from a background thread."""
     import store
     run_by_id = {}
-    if not client or not client.token:
+    if not store.client or not store.client.token:
         GLib.idle_add(lambda: _update_watch_status(run_by_id, on_done))
         return
     if not fetch_list:
@@ -261,32 +250,32 @@ def refresh_watch_status(client, fetch_list=None, on_done=None):
     for item in fetch_list:
         repo_key = item[0] if item else ""
         run_id = int(item[2] or 0) if len(item) >= 3 else 0
-        rid, run = _fetch_run_by_id(client, repo_key, run_id)
+        rid, run = _fetch_run_by_id(store.client, repo_key, run_id)
         if rid is not None:
             run_by_id[rid] = run
     GLib.idle_add(lambda rbi=run_by_id, od=on_done: _update_watch_status(rbi, od))
 
 
-def _refresh_watches_fetch(config, client):
+def _refresh_watches_fetch():
     """
     Build effective watch list and fetch runs (API). Safe to run in a background thread.
+    Reads config and client from store.
     Returns (effective_watches, runs_by_key). Caller must run fill_watches_store on main thread.
     Enriches runs_by_key with each watch's run (by id) so completed runs get correct status when table is refilled.
     """
     import store
-    if not client or not client.token:
+    if not store.client or not store.client.token:
         return [], {}
-    targets = _auto_watch_targets(config)
-    runs_by_key = _fetch_auto_watch_runs(config, client, targets)
-    base_watches = get_all_watches(config)
-    store_watches = getattr(store, "watches_list_store", None)
+    targets = _auto_watch_targets(store.config)
+    runs_by_key = _fetch_auto_watch_runs(store.config, store.client, targets)
+    base_watches = get_all_watches(store.config)
     effective_watches = list(base_watches)
-    
+
     effective_keys = {_watch_key(w) for w in effective_watches}
-    if store_watches is not None:
-        n = store_watches.get_n_items()
+    if store.watches_list_store is not None:
+        n = store.watches_list_store.get_n_items()
         for i in range(n):
-            row = store_watches.get_item(i)
+            row = store.watches_list_store.get_item(i)
             w = _watch_row_to_dict(row)
             if _watch_key(w) in effective_keys:
                 continue
@@ -315,20 +304,20 @@ def _refresh_watches_fetch(config, client):
         runs = runs_by_key.get(key, [])
         if any(int(r.get("id") or 0) == run_id for r in runs):
             continue
-        _rid, run = _fetch_run_by_id(client, watch.get("repo") or "", run_id)
+        _rid, run = _fetch_run_by_id(store.client, watch.get("repo") or "", run_id)
         if run:
             runs_by_key.setdefault(key, []).append(run)
     return effective_watches, runs_by_key
 
 
-def refresh_watches(config, client):
+def refresh_watches():
     """
     Build effective watch list and fill store.watches_list_store. Call from main thread only,
     or use _refresh_watches_fetch in a thread + fill_watches_store on main.
     """
     from tabs.watches import fill_watches_store
 
-    effective_watches, runs_by_key = _refresh_watches_fetch(config, client)
+    effective_watches, runs_by_key = _refresh_watches_fetch()
     fill_watches_store(effective_watches, runs_by_key)
 
 

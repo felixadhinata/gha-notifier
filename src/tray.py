@@ -10,25 +10,31 @@ import tempfile
 import threading
 import time
 
+import gi
+gi.require_version("GLib", "2.0")
+from gi.repository import GLib
+
 SOCKET_ENV = "GHA_NOTIFIER_SOCKET"
 MENU_FILE_ENV = "GHA_NOTIFIER_MENU_FILE"
 ASSETS_ENV = "GHA_NOTIFIER_ASSETS"
 
 
-def make_command_callback(idle_add, window, poll_once, shutdown_and_quit, clear_completed=None):
-    """Build the callback for tray menu commands. Run from a bg thread; use idle_add to run on main thread."""
+def make_command_callback(poll_once, shutdown_and_quit, clear_completed=None):
+    """Build the callback for tray menu commands. Run from a bg thread; schedules on main thread via GLib.idle_add."""
+    import store
+
     def handle(cmd):
         def run():
             if cmd == "open":
-                window.set_visible(True)
-                window.present()
+                store.window.set_visible(True)
+                store.window.present()
             elif cmd == "refresh":
                 poll_once()
             elif cmd == "clear_completed" and clear_completed:
                 clear_completed()
             elif cmd == "quit":
                 shutdown_and_quit()
-        idle_add(run)
+        GLib.idle_add(run)
     return handle
 
 
@@ -210,9 +216,6 @@ def run_indicator():
             except Exception:
                 pass
 
-    last_payload = [None]
-    dynamic_items = []
-
     def set_item_label(item, text):
         for child in item.get_children():
             if hasattr(child, "set_text"):
@@ -233,53 +236,77 @@ def run_indicator():
                 break
         for c in link_item.get_children():
             if hasattr(c, "set_text"):
-                c.set_text(f"       {commit_text or "—"}")
+                c.set_text(f"       {commit_text or '—'}")
                 break
             if hasattr(c, "set_label"):
-                c.set_label(f"       {commit_text or "—"}")
+                c.set_label(f"       {commit_text or '—'}")
                 break
+
+    last_payload = [None]
+    # (structure_signature, list of (repo_item, [(header_item, link_item), ...])) for in-place updates
+    _menu_state = [None, []]
+
+    def _repos_structure(repos):
+        return [(r[0], len(r[1])) for r in repos if r[0]]
 
     def build_menu():
         try:
             payload = open(menu_file, "r", encoding="utf-8").read()
         except Exception:
             payload = ""
+        parsed = tray_menu_payload(payload)
+
+        repos = []
+        current_repo = None
+        current_watches = []
+        for kind, args in parsed:
+            if kind == "repo":
+                if current_repo is not None:
+                    repos.append((current_repo, current_watches))
+                current_repo = args[0] if args else ""
+                current_watches = []
+            elif kind == "watch":
+                current_watches.append(args)
+        if current_repo is not None:
+            repos.append((current_repo, current_watches))
+
+        new_sig = _repos_structure(repos)
+        old_sig, dynamic = _menu_state
+        # If structure unchanged, update labels/icon in place so submenus don't collapse.
         if payload == last_payload[0]:
             return True
-        parsed = tray_menu_payload(payload)
-        expected_len = sum(1 if k == "repo" else 2 for k, _ in parsed)
-        if dynamic_items and len(dynamic_items) == expected_len:
-            idx = 0
-            for kind, args in parsed:
-                if kind == "repo":
-                    set_item_label(dynamic_items[idx], args[0])
-                    idx += 1
-                else:
+        if old_sig == new_sig and len(dynamic) == len(new_sig):
+            last_payload[0] = payload
+            repos_with_name = [(r, w) for r, w in repos if r]
+            for (repo_item, watch_pairs), (repo_name, watches) in zip(dynamic, repos_with_name):
+                set_item_label(repo_item, repo_name)
+                for (header_item, link_item), args in zip(watch_pairs, watches):
                     label = args[0] if len(args) >= 1 else "—"
                     status = args[1] if len(args) >= 2 else "gray"
                     commit = args[3] if len(args) >= 4 else ""
-                    set_watch_item(dynamic_items[idx], dynamic_items[idx + 1], status, label, commit)
-                    idx += 2
-            last_payload[0] = payload
+                    set_watch_item(header_item, link_item, status, label, commit)
             try:
                 ind.set_icon(_indicator_icon(_pick_indicator_status(parsed), assets))
             except Exception:
                 pass
             return True
+
         last_payload[0] = payload
         menu.foreach(lambda w: menu.remove(w))
-        dynamic_items[:] = []
-        for kind, args in parsed:
-            if kind == "repo":
-                item = Gtk.MenuItem(label=args[0])
-                item.set_sensitive(False)
-                menu.append(item)
-                dynamic_items.append(item)
-            else:
+        dynamic = []
+
+        for repo_name, watches in repos:
+            if not repo_name:
+                continue
+            repo_item = Gtk.MenuItem(label=repo_name)
+            submenu = Gtk.Menu()
+            pairs = []
+            for args in watches:
                 label = args[0] if len(args) >= 1 else "—"
                 status = args[1] if len(args) >= 2 else "gray"
                 url = args[2] if len(args) >= 3 else ""
                 commit = args[3] if len(args) >= 4 else ""
+
                 header_item = Gtk.MenuItem(label=_status_label(status, label))
                 try:
                     header_item.get_child().set_ellipsize(3)
@@ -287,17 +314,24 @@ def run_indicator():
                     pass
                 if url and url.strip():
                     header_item.connect("activate", lambda _, u=url: _open_url(u))
-                menu.append(header_item)
-                dynamic_items.append(header_item)
-                link_item = Gtk.MenuItem(label=f"       {commit or "—"}")
+                submenu.append(header_item)
+
+                link_item = Gtk.MenuItem(label=f"       {commit or '—'}")
                 link_item.set_sensitive(False)
                 try:
                     link_item.get_child().set_ellipsize(3)
                 except Exception:
                     pass
-                menu.append(link_item)
-                dynamic_items.append(link_item)
-        if parsed:
+                submenu.append(link_item)
+                pairs.append((header_item, link_item))
+
+            repo_item.set_submenu(submenu)
+            menu.append(repo_item)
+            dynamic.append((repo_item, pairs))
+
+        _menu_state[0] = new_sig
+        _menu_state[1] = dynamic
+        if repos:
             menu.append(Gtk.SeparatorMenuItem())
         for label, cmd in [("Open", "open"), ("Refresh", "refresh"), ("Clear completed", "clear_completed")]:
             item = Gtk.MenuItem(label=label)

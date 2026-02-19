@@ -372,10 +372,9 @@ class GhaNotifierApp(Gtk.Application):
         """Called by store.refresh_watch_workflows(). Runs fetch in background, fill + tray update on main (never blocks UI)."""
         import threading
         from branch_service import _refresh_watches_fetch
-        from store import config, client
 
         def worker():
-            effective_watches, runs_by_key = _refresh_watches_fetch(config, client)
+            effective_watches, runs_by_key = _refresh_watches_fetch()
 
             def on_main():
                 from tabs.watches import fill_watches_store
@@ -403,8 +402,6 @@ class GhaNotifierApp(Gtk.Application):
         self.tray = TrayHandler()
         assets = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
         on_cmd = make_command_callback(
-            GLib.idle_add,
-            self.window,
             self.poll_manager.poll_once,
             lambda: (self.tray.shutdown(), self.quit()),
             clear_completed=clear_completed_watches,

@@ -16,6 +16,16 @@ from table_helpers import add_column, make_open_url_factory, make_status_factory
 
 import store
 
+
+class _UI:
+    """Holds widget refs owned by this tab. Set during build_watches_tab()."""
+    watches_section_spinner = None
+    watches_section_label = None
+    watches_empty_label = None
+    watches_table_scroll = None
+
+_ui = _UI()
+
 # Column widths aligned with workflow table in branches_workflows.py
 
 
@@ -24,7 +34,7 @@ import store
 # ---------------------------------------------------------------------------
 
 def build_watches_tab():
-    """Build the 'Watches' tab content. Sets widget refs on store and returns the outer box."""
+    """Build the 'Watches' tab content. Sets widget refs on _ui and returns the outer box."""
     store.watches_list_store = Gio.ListStore.new(WatchRow)
     selection = Gtk.NoSelection.new(store.watches_list_store)
     column_view = Gtk.ColumnView(model=selection)
@@ -45,11 +55,11 @@ def build_watches_tab():
 
     # Section header: Watches label, spinner, spacer, Refresh, Clear completed
     header_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-    store.watches_section_label = Gtk.Label()
-    store.watches_section_label.set_markup("<b>Watches</b>")
-    store.watches_section_label.set_halign(Gtk.Align.START)
-    store.watches_section_spinner = Gtk.Spinner()
-    store.watches_section_spinner.set_visible(False)
+    _ui.watches_section_label = Gtk.Label()
+    _ui.watches_section_label.set_markup("<b>Watches</b>")
+    _ui.watches_section_label.set_halign(Gtk.Align.START)
+    _ui.watches_section_spinner = Gtk.Spinner()
+    _ui.watches_section_spinner.set_visible(False)
     spacer = Gtk.Box()
     spacer.set_hexpand(True)
     refresh_btn = Gtk.Button()
@@ -61,8 +71,8 @@ def build_watches_tab():
     refresh_btn.connect("clicked", _on_refresh_clicked)
     clear_btn = Gtk.Button(label="Clear completed")
     clear_btn.connect("clicked", _on_clear_completed_clicked)
-    header_row.append(store.watches_section_label)
-    header_row.append(store.watches_section_spinner)
+    header_row.append(_ui.watches_section_label)
+    header_row.append(_ui.watches_section_spinner)
     header_row.append(spacer)
     header_row.append(refresh_btn)
     header_row.append(clear_btn)
@@ -77,14 +87,14 @@ def build_watches_tab():
     outer.set_margin_end(12)
     outer.set_margin_top(12)
     outer.set_margin_bottom(12)
-    store.watches_empty_label = Gtk.Label(
+    _ui.watches_empty_label = Gtk.Label(
         label="No watches. Use the \"Branches & Workflows\" tab to add watches."
     )
-    store.watches_empty_label.set_xalign(0)
-    store.watches_empty_label.set_wrap(True)
-    store.watches_table_scroll = scroll
+    _ui.watches_empty_label.set_xalign(0)
+    _ui.watches_empty_label.set_wrap(True)
+    _ui.watches_table_scroll = scroll
     outer.append(header_row)
-    outer.append(store.watches_empty_label)
+    outer.append(_ui.watches_empty_label)
     outer.append(scroll)
     scroll.set_vexpand(True)
     seed_watches_from_config()
@@ -94,7 +104,7 @@ def build_watches_tab():
 def clear_completed_watches():
     """Remove completed rows from watches_list_store; if a row is in config.watches, remove it there too. Then update_tray_menu."""
     if store.watches_list_store is None:
-        if getattr(store, "update_tray_menu", None):
+        if store.update_tray_menu:
             store.update_tray_menu()
         return
     n = store.watches_list_store.get_n_items()
@@ -112,7 +122,7 @@ def clear_completed_watches():
             store.config["watches"] = keep
             save_config(store.config)
     _sync_watches_visibility()
-    if getattr(store, "update_tray_menu", None):
+    if store.update_tray_menu:
         store.update_tray_menu()
 
 
@@ -150,10 +160,10 @@ def _sync_watches_visibility():
     if store.watches_list_store is None:
         return
     n = store.watches_list_store.get_n_items()
-    if getattr(store, "watches_table_scroll", None) is not None:
-        store.watches_table_scroll.set_visible(n > 0)
-    if getattr(store, "watches_empty_label", None) is not None:
-        store.watches_empty_label.set_visible(n == 0)
+    if _ui.watches_table_scroll is not None:
+        _ui.watches_table_scroll.set_visible(n > 0)
+    if _ui.watches_empty_label is not None:
+        _ui.watches_empty_label.set_visible(n == 0)
 
 
 def sync_watches_tab_ui():
@@ -165,7 +175,7 @@ def refresh_watches_tab():
     """Refresh watches from branch_service (config + in-progress), then sync Watches tab UI. Blocks on main thread."""
     from branch_service import refresh_watches
     if store.config and store.client:
-        refresh_watches(store.config, store.client)
+        refresh_watches()
     sync_watches_tab_ui()
 
 
@@ -196,15 +206,14 @@ def _on_refresh_clicked(btn):
 
 def _set_watches_loading(loading):
     """Show or hide the Watches section spinner."""
-    spinner = getattr(store, "watches_section_spinner", None)
-    if not spinner:
+    if not _ui.watches_section_spinner:
         return
     if loading:
-        spinner.set_visible(True)
-        spinner.start()
+        _ui.watches_section_spinner.set_visible(True)
+        _ui.watches_section_spinner.start()
     else:
-        spinner.stop()
-        spinner.set_visible(False)
+        _ui.watches_section_spinner.stop()
+        _ui.watches_section_spinner.set_visible(False)
 
 
 def _watch_to_row(watch, runs_by_key=None):
