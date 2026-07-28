@@ -155,7 +155,10 @@ function renderRepoList(): void {
 
     const name = document.createElement("span");
     name.className = "repo-name";
-    name.textContent = repoKey;
+    const [owner, repoName] = repoKey.split("/", 2);
+    name.innerHTML = repoName
+      ? `<span class="repo-owner">${escapeHtml(owner)}/</span>${escapeHtml(repoName)}`
+      : escapeHtml(repoKey);
 
     const removeBtn = document.createElement("button");
     removeBtn.className = "remove-btn";
@@ -240,7 +243,9 @@ function renderRunsPane(): void {
 
   if (selectedRepo === null) {
     runsTitle.textContent = "";
-    runsBody.appendChild(emptyState("\u{1F441}", "Select a repository to see your recent workflow runs."));
+    runsBody.appendChild(
+      emptyPane("\u{1F441}", "Select a repository", "Pick one on the left to see your recent workflow runs.")
+    );
     return;
   }
 
@@ -248,7 +253,10 @@ function renderRunsPane(): void {
   const runs = runsByRepo[selectedRepo];
 
   if (runs === undefined) {
-    runsBody.appendChild(emptyState("", "Loading…"));
+    const loading = document.createElement("div");
+    loading.className = "plain-message";
+    loading.textContent = "Loading…";
+    runsBody.appendChild(loading);
     return;
   }
   if (runs.length === 0) {
@@ -262,18 +270,15 @@ function renderRunsPane(): void {
   runsBody.appendChild(buildRunsTable(runs));
 }
 
-function emptyState(mark: string, text: string): HTMLElement {
+function emptyPane(mark: string, title: string, description: string): HTMLElement {
   const box = document.createElement("div");
-  box.className = "empty-state";
-  if (mark) {
-    const markEl = document.createElement("div");
-    markEl.className = "mark";
-    markEl.textContent = mark;
-    box.appendChild(markEl);
-  }
+  box.className = "empty-pane";
+  const markEl = document.createElement("div");
+  markEl.className = "mark";
+  markEl.textContent = mark;
   const p = document.createElement("p");
-  p.textContent = text;
-  box.appendChild(p);
+  p.innerHTML = `<b>${escapeHtml(title)}</b><br>${escapeHtml(description)}`;
+  box.append(markEl, p);
   return box;
 }
 
@@ -299,13 +304,13 @@ function buildRunsTable(runs: GithubRun[]): HTMLTableElement {
     const tr = document.createElement("tr");
     const inProgress = ["in_progress", "queued"].includes((run.status || "").toLowerCase());
     const status = repoStatus([run]);
-    const statusText = { yellow: "running", green: "success", red: "failed", gray: "—" }[status];
+    const statusText = { yellow: "Running", green: "Success", red: "Failed", gray: "—" }[status];
     const commit = (run.head_commit?.message || "").trim().split("\n")[0].slice(0, 80) || "—";
 
     tr.innerHTML = `
       <td>${escapeHtml(run.name || "Workflow")}</td>
       <td>${escapeHtml(run.head_branch || "—")}</td>
-      <td><span class="status-cell ${statusClass(status)}">● ${statusText}</span></td>
+      <td><span class="status-pill ${statusClass(status)}"><span class="dot ${statusClass(status)}"></span>${statusText}</span></td>
       <td class="num">${escapeHtml(formatDuration(run.run_started_at, inProgress ? null : run.updated_at))}</td>
       <td><span class="commit-cell" title="${escapeHtml(commit)}">${escapeHtml(commit)}</span></td>
       <td class="num">${escapeHtml(formatTriggered(run.run_started_at))}</td>
@@ -333,10 +338,10 @@ function escapeHtml(s: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Add-repository modal
+// Add-repository popover
 // ---------------------------------------------------------------------------
 
-const addRepoModal = $<HTMLDivElement>("add-repo-modal");
+const addRepoPopover = $<HTMLDivElement>("add-repo-popover");
 const addRepoInput = $<HTMLInputElement>("add-repo-input");
 const addRepoSuggestions = $<HTMLUListElement>("add-repo-suggestions");
 const addRepoHint = $<HTMLParagraphElement>("add-repo-hint");
@@ -345,18 +350,33 @@ const addRepoConfirm = $<HTMLButtonElement>("add-repo-confirm");
 let myRepos: string[] = [];
 let activatedRepo: string | null = null;
 
-addRepoBtn.addEventListener("click", async () => {
+addRepoBtn.addEventListener("click", async (e) => {
+  e.stopPropagation();
+  if (!addRepoPopover.hidden) {
+    addRepoPopover.hidden = true;
+    return;
+  }
   activatedRepo = null;
   addRepoInput.value = "";
   addRepoConfirm.disabled = true;
   addRepoHint.textContent = "Loading your repositories…";
   addRepoSuggestions.innerHTML = "";
-  openModal(addRepoModal);
+  addRepoPopover.hidden = false;
   addRepoInput.focus();
   const result = await gha.searchMyRepos();
   myRepos = result.repos;
   addRepoHint.textContent = 'Select a repository, or type "owner/repo" above and press Enter.';
   refillSuggestions();
+});
+
+addRepoPopover.querySelectorAll<HTMLButtonElement>('[data-action="cancel"]').forEach((btn) => {
+  btn.addEventListener("click", () => {
+    addRepoPopover.hidden = true;
+  });
+});
+addRepoPopover.addEventListener("click", (e) => e.stopPropagation());
+document.addEventListener("click", () => {
+  addRepoPopover.hidden = true;
 });
 
 addRepoInput.addEventListener("input", () => {
@@ -401,7 +421,7 @@ function getSelectedRepo(): string | null {
 async function confirmAddRepo(): Promise<void> {
   const repoKey = getSelectedRepo();
   if (!repoKey) return;
-  closeModal(addRepoModal);
+  addRepoPopover.hidden = true;
   const result = await gha.addRepo(repoKey);
   if (!result.added) return;
   repos = result.repos;

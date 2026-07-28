@@ -14,10 +14,12 @@
         <span id="auth-label">Sign in to get started</span>
       </div>
       <div class="spacer"></div>
-      <button id="settings-btn" class="icon-btn" title="Settings" hidden>&#9881;</button>
+      <button id="settings-btn" class="btn icon" title="Settings" hidden>&#9881;</button>
     </header>
 
     <section id="signin-screen" class="signin-screen">
+      <div class="mark">&#9737;</div>
+      <h2>Sign in to get started</h2>
       <p class="hint">Sign in with GitHub CLI or a Personal Access Token.</p>
       <div class="signin-actions">
         <button id="signin-gh-btn" class="btn primary">Sign in with GitHub CLI</button>
@@ -32,37 +34,35 @@
           <span class="section-label">Monitored repos</span>
           <div id="repos-spinner" class="spinner" hidden></div>
         </div>
-        <div class="card repos-card">
-          <ul id="repo-list" class="repo-list"></ul>
+        <ul id="repo-list" class="repo-list"></ul>
+        <div class="add-repo-row">
+          <button id="add-repo-btn" class="btn">+ Add repository</button>
         </div>
-        <button id="add-repo-btn" class="btn add-repo-btn">+ Add repository</button>
+
+        <!-- Add-repository popover, anchored above the button -->
+        <div id="add-repo-popover" class="add-popover" hidden>
+          <label for="add-repo-input">GitHub repository</label>
+          <input id="add-repo-input" type="text" placeholder="owner/repo" autocomplete="off" />
+          <ul id="add-repo-suggestions" class="suggestion-list"></ul>
+          <p id="add-repo-hint" class="hint small">Loading your repositories…</p>
+          <div class="row">
+            <button class="btn subtle" data-action="cancel">Cancel</button>
+            <button id="add-repo-confirm" class="btn primary" disabled>Add</button>
+          </div>
+        </div>
       </aside>
 
       <section class="runs-pane">
         <div class="runs-head">
           <h2 id="runs-title"></h2>
           <div class="spacer"></div>
-          <button id="refresh-btn" class="icon-btn" title="Refresh" disabled>&#8635;</button>
+          <button id="refresh-btn" class="btn icon" title="Refresh" disabled>&#8635;</button>
         </div>
-        <div class="card runs-card">
+        <div class="runs-scroll">
           <div id="runs-body" class="runs-body"></div>
         </div>
       </section>
     </main>
-  </div>
-
-  <!-- Add repository modal -->
-  <div id="add-repo-modal" class="modal-backdrop" hidden>
-    <div class="modal">
-      <h3>Add repository</h3>
-      <input id="add-repo-input" type="text" placeholder="owner/repo, or search your repositories…" autocomplete="off" />
-      <ul id="add-repo-suggestions" class="suggestion-list"></ul>
-      <p id="add-repo-hint" class="hint small">Loading your repositories…</p>
-      <div class="modal-actions">
-        <button class="btn" data-action="cancel">Cancel</button>
-        <button id="add-repo-confirm" class="btn primary" disabled>Add</button>
-      </div>
-    </div>
   </div>
 
   <!-- Sign in with token modal -->
