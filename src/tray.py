@@ -19,7 +19,7 @@ MENU_FILE_ENV = "GHA_NOTIFIER_MENU_FILE"
 ASSETS_ENV = "GHA_NOTIFIER_ASSETS"
 
 
-def make_command_callback(poll_once, shutdown_and_quit, clear_completed=None):
+def make_command_callback(poll_once, shutdown_and_quit):
     """Build the callback for tray menu commands. Run from a bg thread; schedules on main thread via GLib.idle_add."""
     import store
 
@@ -30,8 +30,6 @@ def make_command_callback(poll_once, shutdown_and_quit, clear_completed=None):
                 store.window.present()
             elif cmd == "refresh":
                 poll_once()
-            elif cmd == "clear_completed" and clear_completed:
-                clear_completed()
             elif cmd == "quit":
                 shutdown_and_quit()
         GLib.idle_add(run)
@@ -110,7 +108,7 @@ def tray_menu_payload(data):
 
 _STATUS_EMOJI = {"green": "🟢", "yellow": "🟡", "red": "🔴", "gray": "⚪"}
 
-# Priority: yellow > red > green > gray (same as formatters.pick_status)
+# Priority: yellow > red > green > gray
 _ICON_PRIORITY = ("yellow", "red", "green", "gray")
 
 
@@ -333,7 +331,7 @@ def run_indicator():
         _menu_state[1] = dynamic
         if repos:
             menu.append(Gtk.SeparatorMenuItem())
-        for label, cmd in [("Open", "open"), ("Refresh", "refresh"), ("Clear completed", "clear_completed")]:
+        for label, cmd in [("Open", "open"), ("Refresh", "refresh")]:
             item = Gtk.MenuItem(label=label)
             item.connect("activate", lambda _, c=cmd: send_cmd(c))
             menu.append(item)

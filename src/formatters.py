@@ -89,34 +89,6 @@ def get_status_markup(status_color_name):
     return f"<span foreground='{hex_color}'>●</span> {label}"
 
 
-def get_watch_run_info(watch, runs_by_key=None):
-    """Return (name, status, duration) for a watch using runs_by_key. Match by runId."""
-    if runs_by_key is None:
-        return None, "gray", "—"
-    key = f"{watch['repo']}:{watch['branch']}"
-    runs = runs_by_key.get(key, [])
-    run_id = int(watch.get("runId") or 0)
-    match = next((r for r in runs if int(r.get("id") or 0) == run_id), None) if run_id else None
-    if not match:
-        return None, "gray", "—"
-    status = resolve_status(match)
-    in_progress = (match.get("status") or "").lower() in ("in_progress", "queued")
-    duration = format_duration(match.get("run_started_at"), None if in_progress else match.get("updated_at"))
-    name = match.get("name") or "Workflow"
-    return name, status, duration
-
-
-def pick_status(statuses):
-    """Priority: yellow (in progress) > red (failed) > green (success) > gray."""
-    if "yellow" in statuses:
-        return "yellow"
-    if "red" in statuses:
-        return "red"
-    if "green" in statuses:
-        return "green"
-    return "gray"
-
-
 def resolve_status(run):
     status = run.get("status")
     if status in ("in_progress", "queued"):

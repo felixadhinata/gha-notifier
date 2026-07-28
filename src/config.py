@@ -3,53 +3,21 @@ import os
 
 from gi.repository import GLib
 
-from models import RepoConfig
-
 
 DEFAULT_CONFIG = {
     "clientId": None,
-    "pollIntervalSec": 5,
-    "branchListPollIntervalSec": 30,
+    "pollIntervalSec": 20,
     "notifyEnabled": True,
     "openOnStartup": False,
     "repos": [],
-    "watches": [],
-    "autoWatches": [],
     "token": None,
     "user": None,
 }
 
 
 # ---------------------------------------------------------------------------
-# Public (all config functions are public)
+# Public
 # ---------------------------------------------------------------------------
-
-def find_watch(watches, repo, branch, run_id):
-    """Return the watch dict matching (repo, branch, runId)."""
-    run_id_int = int(run_id or 0)
-    for w in watches:
-        if w.get("repo") != repo or w.get("branch") != branch:
-            continue
-        if int(w.get("runId") or 0) == run_id_int:
-            return w
-    return None
-
-
-def find_watch_repo_branch(watches, repo, branch):
-    """Return the first watch dict for (repo, branch), or None. Used when resolving 'any' watch for this repo/branch."""
-    for w in watches:
-        if w.get("repo") == repo and w.get("branch") == branch:
-            return w
-    return None
-
-
-def get_all_watches(config):
-    """Return list of watches from config only (config['watches']). For all watches including auto, use store."""
-    watches = config.get("watches", [])
-    if not isinstance(watches, list):
-        watches = []
-    return list(watches)
-
 
 def get_config_path():
     config_dir = os.path.join(GLib.get_user_config_dir(), "gha-notifier")
@@ -93,11 +61,34 @@ X-GNOME-Autostart-enabled=true
 
 
 def get_repos(config):
-    """Return list of RepoConfig from config['repos']."""
+    """Return sorted list of monitored 'owner/repo' strings."""
     raw = config.get("repos", [])
     if not isinstance(raw, list):
-        raw = []
-    return [RepoConfig.from_dict(r) for r in raw]
+        return []
+    return sorted({r.strip() for r in raw if isinstance(r, str) and r.strip()})
+
+
+def add_repo(config, repo_key):
+    """Add a repo ('owner/repo') to config['repos'] if not already present. Returns True if added."""
+    repo_key = (repo_key or "").strip()
+    owner, _, repo = repo_key.partition("/")
+    if not owner or not repo:
+        return False
+    repos = get_repos(config)
+    if repo_key in repos:
+        return False
+    repos.append(repo_key)
+    config["repos"] = sorted(repos)
+    return True
+
+
+def remove_repo(config, repo_key):
+    """Remove a repo from config['repos']. Returns True if it was present."""
+    repos = get_repos(config)
+    if repo_key not in repos:
+        return False
+    config["repos"] = [r for r in repos if r != repo_key]
+    return True
 
 
 def load_config():
@@ -106,17 +97,15 @@ def load_config():
         return DEFAULT_CONFIG.copy()
     try:
         with open(path, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-            merged = DEFAULT_CONFIG.copy()
-            merged.update(data or {})
-            # Ensure "watches" and "autoWatches" are always new lists
-            raw = merged.get("watches", [])
-            merged["watches"] = list(raw) if isinstance(raw, list) else []
-            raw_auto = merged.get("autoWatches", [])
-            merged["autoWatches"] = list(raw_auto) if isinstance(raw_auto, list) else []
-            return merged
+            data = json.load(handle) or {}
     except (OSError, json.JSONDecodeError):
         return DEFAULT_CONFIG.copy()
+    merged = DEFAULT_CONFIG.copy()
+    for key in DEFAULT_CONFIG:
+        if key in data:
+            merged[key] = data[key]
+    merged["repos"] = _normalize_repos(data.get("repos"))
+    return merged
 
 
 def save_config(config):
@@ -126,6 +115,21 @@ def save_config(config):
         json.dump(config, handle, indent=2)
 
 
-def set_repos(config, repos):
-    """Write config['repos'] from a list of RepoConfig."""
-    config["repos"] = [r.to_dict() for r in repos]
+# ---------------------------------------------------------------------------
+# Private
+# ---------------------------------------------------------------------------
+
+def _normalize_repos(raw):
+    """Accept either the new plain-string shape or the legacy {owner, repo, ...} dict shape."""
+    if not isinstance(raw, list):
+        return []
+    repos = []
+    for entry in raw:
+        if isinstance(entry, str) and entry.strip():
+            repos.append(entry.strip())
+        elif isinstance(entry, dict):
+            owner = (entry.get("owner") or "").strip()
+            repo = (entry.get("repo") or "").strip()
+            if owner and repo:
+                repos.append(f"{owner}/{repo}")
+    return sorted(set(repos))

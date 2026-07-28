@@ -63,37 +63,10 @@ class GitHubClient:
             method="POST",
         )
 
-    def get_branches(self, owner, repo, page=1, per_page=100):
-        url = f"{GITHUB_API}/repos/{owner}/{repo}/branches?per_page={per_page}&page={page}"
+    def get_runs_for_actor(self, owner, repo, actor, per_page=20):
+        """List workflow runs across all branches triggered by `actor`, most recent first."""
+        url = (
+            f"{GITHUB_API}/repos/{owner}/{repo}/actions/runs"
+            f"?per_page={per_page}&actor={urllib.parse.quote(actor)}"
+        )
         return self._request_json(url, data=None, method="GET")
-
-    def get_pulls(self, owner, repo, state="open", page=1, per_page=100):
-        url = f"{GITHUB_API}/repos/{owner}/{repo}/pulls?state={state}&per_page={per_page}&page={page}"
-        return self._request_json(url, data=None, method="GET")
-
-    def get_pull(self, owner, repo, pull_number):
-        """Fetch a single PR (includes head.ref for branch name)."""
-        url = f"{GITHUB_API}/repos/{owner}/{repo}/pulls/{pull_number}"
-        return self._request_json(url, data=None, method="GET")
-
-    def search_issues(self, q, page=1, per_page=100):
-        """Search issues/PRs. q e.g. 'repo:owner/repo type:pr author:login is:open'."""
-        url = f"{GITHUB_API}/search/issues?q={urllib.parse.quote(q)}&per_page={per_page}&page={page}"
-        return self._request_json(url, data=None, method="GET")
-
-    def get_runs(self, owner, repo, branch, status=None):
-        """List workflow runs for branch. status: None (all), 'in_progress', 'completed', etc."""
-        url = f"{GITHUB_API}/repos/{owner}/{repo}/actions/runs?per_page=20&branch={urllib.parse.quote(branch)}"
-        if status:
-            url += f"&status={urllib.parse.quote(status)}"
-        return self._request_json(url, data=None, method="GET")
-
-    def get_run(self, owner, repo, run_id):
-        """Fetch a single workflow run by id. Returns run dict or empty on error."""
-        if not run_id:
-            return {}
-        url = f"{GITHUB_API}/repos/{owner}/{repo}/actions/runs/{int(run_id)}"
-        try:
-            return self._request_json(url, data=None, method="GET")
-        except Exception:
-            return {}

@@ -1,6 +1,7 @@
 # GHA Notifier (GTK)
 
-Native GTK app for GitHub Actions with tray status, branch selection, and workflow alerts.
+Native GTK app for GitHub Actions. Pick the repositories you want to monitor; it watches
+workflow runs you triggered or committed, across every branch, and notifies you when they finish.
 
 ## Requirements
 - Python 3
@@ -30,5 +31,6 @@ chmod +x scripts/build-deb.sh
 The app uses GTK 4. The system tray (AppIndicator) is not available on GTK 4, so the app runs as a window-only app; use the window to sign in, pick branches, and manage workflow subscriptions. Notifications still use libnotify.
 
 ## Notes
-- "My branches" are determined by last commit author matching your GitHub user.
-- Tray colors follow priority: red > green > yellow > gray.
+- Add a repository from the window; there's no branch picker or per-branch settings — every
+  workflow run you triggered or committed, on any branch, shows up automatically.
+- Tray colors follow priority: yellow (running) > red (failed) > green (succeeded) > gray (no runs yet).

@@ -12,26 +12,17 @@ gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 from gi.repository import Gio, GLib, Gtk
 
-from config import DEFAULT_CONFIG, get_all_watches, load_config, save_config, set_open_on_startup
-from dialogs import RepoDialog, SettingsDialog, TokenLoginDialog
-from formatters import get_watch_run_info
+from config import DEFAULT_CONFIG, load_config, save_config, set_open_on_startup
+from dialogs import SettingsDialog, TokenLoginDialog
 from github import GitHubClient
-from pollers import PollerManager
 from icons import show_fatal_error
+from main_view import build_main_view, on_repo_runs_updated, reset_selection
+from pollers import PollerManager
+from repo_service import refresh_repo_runs
 import store
 from store import register as store_register
-from tabs import (
-    build_branches_workflows_tab,
-    build_watches_tab,
-    clear_completed_watches,
-    refill_branch_list,
-    refresh_watches_tab,
-    refresh_workflows_for_selection,
-    render_branches_list,
-)
-from tabs.watches import sync_watches_tab_ui
 from tray import TrayHandler, make_command_callback
-from ui_helpers import clear_box, run_dialog_modal
+from ui_helpers import run_dialog_modal
 
 
 APP_ID = "com.gha.notifier"
@@ -42,6 +33,8 @@ DEBUG = os.environ.get("GHA_NOTIFIER_DEBUG", "").lower() in ("1", "true", "yes")
 START_TRAY_ONLY = "--tray-only" in sys.argv
 
 class GhaNotifierApp(Gtk.Application):
+    TRAY_RUNS_PER_REPO = 8
+
     def __init__(self):
         super().__init__(
             application_id=APP_ID,
@@ -53,15 +46,6 @@ class GhaNotifierApp(Gtk.Application):
         self.client = GitHubClient(self.config.get("token"))
         self.window = None
         self.tray = None
-        from store import (
-            pr_to_branch,
-            pr_branches_loading,
-            branch_list,
-        )
-        self._pr_to_branch = pr_to_branch
-        self._pr_branches_loading = pr_branches_loading
-        self._workflows_loading_count = 0
-        self._branch_list = branch_list
         self.poll_manager = PollerManager()
 
     def _on_startup(self, app):
@@ -119,7 +103,7 @@ class GhaNotifierApp(Gtk.Application):
             self.window = Gtk.ApplicationWindow(application=self)
             self.window.set_title(APP_NAME)
             self.window.set_icon_name("gha-notifier")
-            self.window.set_default_size(680, 520)
+            self.window.set_default_size(780, 560)
             self.window.set_size_request(200, 260)
             self.window.connect("close-request", self.on_window_close)
             self.window.connect("map", lambda w: GLib.idle_add(self.refresh_auth_ui))
@@ -129,18 +113,15 @@ class GhaNotifierApp(Gtk.Application):
                 self.get_autostart_exec_command(),
             )
             self.build_ui()
-            from tabs.branches_workflows import refresh_branch_list_from_poll
-            store.refresh_branch_list_poll = refresh_branch_list_from_poll
             if DEBUG:
                 sys.stderr.write("[GHA Notifier] UI built.\n")
 
         self.setup_indicator()
         if DEBUG:
-            sys.stderr.write("[GHA Notifier] Ready. Use the Menu button for watches & actions.\n")
+            sys.stderr.write("[GHA Notifier] Ready. Use the Menu button for settings.\n")
         self.ensure_user()
         self.poll_manager.start_polling()
-        if store.refresh_branch_list_poll:
-            store.refresh_branch_list_poll()
+        refresh_repo_runs(on_done=lambda _r: on_repo_runs_updated())
 
         if not START_TRAY_ONLY:
             self.window.present()
@@ -212,35 +193,15 @@ class GhaNotifierApp(Gtk.Application):
 
         container.append(auth_row)
         container.append(self.login_hint)
-        self.branches_frame = self.build_branches_and_workflows_sections()
-        container.append(self.branches_frame)
+        self.main_view = build_main_view()
+        self.main_view.set_vexpand(True)
+        container.append(self.main_view)
         container.append(auth_btn_box)
         container.append(self.status_box)
 
-        render_branches_list()
         self.refresh_auth_ui()
 
-    def build_branches_and_workflows_sections(self):
-        notebook = Gtk.Notebook()
-        notebook.append_page(build_branches_workflows_tab(), Gtk.Label(label="Branches & Workflows"))
-        notebook.append_page(build_watches_tab(), Gtk.Label(label="Watches"))
-        notebook.connect("switch-page", self._on_notebook_switch_page)
-        return notebook
-
-    def _on_notebook_switch_page(self, notebook, page, page_num):
-        """When switching to Watches tab (page 1), refresh once in background. Throttled to avoid repeated emissions."""
-        if page_num != 1:
-            return
-        now = getattr(self, "_last_watches_tab_refresh", 0) or 0
-        import time
-        if time.time() - now < 2.0:
-            return
-        self._last_watches_tab_refresh = time.time()
-        from tabs.branches_workflows import refresh_watch_workflows
-        refresh_watch_workflows(on_after_refresh=sync_watches_tab_ui)
-
     def refresh_auth_ui(self):
-        branches_frame = self.branches_frame
         user = self.config.get("user")
         if user:
             login = (user.get("login") or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -250,8 +211,8 @@ class GhaNotifierApp(Gtk.Application):
             self.gh_btn.set_visible(False)
             self.token_btn.set_visible(False)
             self.menu_btn.set_visible(True)
-            branches_frame.set_visible(True)
-            self.window.set_default_size(980, 800)
+            self.main_view.set_visible(True)
+            self.window.set_default_size(980, 700)
         else:
             self.auth_label.set_text("Sign in to get started")
             self.auth_label.set_visible(True)
@@ -259,7 +220,7 @@ class GhaNotifierApp(Gtk.Application):
             self.gh_btn.set_visible(True)
             self.token_btn.set_visible(True)
             self.menu_btn.set_visible(True)
-            branches_frame.set_visible(False)
+            self.main_view.set_visible(False)
             self.window.set_default_size(380, 160)
 
     def on_settings_clicked(self, *args):
@@ -268,10 +229,6 @@ class GhaNotifierApp(Gtk.Application):
         if response == Gtk.ResponseType.OK:
             dialog.apply()
         dialog.destroy()
-        if response == Gtk.ResponseType.OK:
-            self.refresh_auth_ui()
-            render_branches_list()
-            refresh_watches_tab()
 
     def _set_login_loading(self, loading):
         if loading:
@@ -346,6 +303,7 @@ class GhaNotifierApp(Gtk.Application):
         self.status_label.set_text("")
         self.refresh_auth_ui()
         self.poll_manager.start_polling()
+        refresh_repo_runs(on_done=lambda _r: on_repo_runs_updated())
 
     def _login_with_token(self, token):
         self.status_label.set_text("Checking token…")
@@ -356,35 +314,13 @@ class GhaNotifierApp(Gtk.Application):
         self.config = DEFAULT_CONFIG.copy()
         save_config(self.config)
         self.client = GitHubClient(self.config.get("token"))
-        self._pr_to_branch.clear()
-        self._pr_branches_loading.clear()
-        self._branch_list.clear()
-        if store.watches_list_store is not None:
-            store.watches_list_store.remove_all()
+        store.repo_runs.clear()
         self.poll_manager.start_polling()
         self.status_label.set_text("")
         self.refresh_auth_ui()
         self.tray.rebuild_menu()
-        render_branches_list()
-        refresh_watches_tab()
-
-    def refresh_watch_workflows_cb(self):
-        """Called by store.refresh_watch_workflows(). Runs fetch in background, fill + tray update on main (never blocks UI)."""
-        import threading
-        from branch_service import _refresh_watches_fetch
-
-        def worker():
-            effective_watches, runs_by_key = _refresh_watches_fetch()
-
-            def on_main():
-                from tabs.watches import fill_watches_store
-                fill_watches_store(effective_watches, runs_by_key)
-                self.tray.rebuild_menu()
-
-            GLib.idle_add(on_main)
-
-        threading.Thread(target=worker, daemon=True).start()
-
+        reset_selection()
+        on_repo_runs_updated()
 
     def ensure_user(self):
         if self.client.token and not self.config.get("user"):
@@ -404,7 +340,6 @@ class GhaNotifierApp(Gtk.Application):
         on_cmd = make_command_callback(
             self.poll_manager.poll_once,
             lambda: (self.tray.shutdown(), self.quit()),
-            clear_completed=clear_completed_watches,
         )
         self.tray.setup(
             on_command=on_cmd,
@@ -413,26 +348,26 @@ class GhaNotifierApp(Gtk.Application):
         )
 
     def _build_tray_menu_payload(self):
-        """Build tray menu payload. Watch = (label, status, url, commit); commit shown as submenu item."""
+        """Build tray menu payload from store.repo_runs: repo -> its recent runs (triggered by you)."""
+        from formatters import format_duration, resolve_status
         from tray import tray_menu_payload
-        lst = store.watches_list_store
-        if lst is None:
-            return tray_menu_payload([])
-        by_repo = {}
-        n = lst.get_n_items()
-        for i in range(n):
-            row = lst.get_item(i)
-            repo = (row.repo or "").strip()
-            by_repo.setdefault(repo, []).append(row)
+
         entries = []
-        for repo in sorted(by_repo.keys()):
-            entries.append(("repo", (repo,)))
-            for row in by_repo[repo]:
-                branch = (row.branch or "—").strip()
-                label = f"{row.workflow_name or 'Workflow'} · {branch} · {row.duration or '—'}"
-                status = row.status if row.status and row.status != "—" else "gray"
-                commit = (row.commit_msg or "—").strip().replace("\n", " ")
-                entries.append(("watch", (label, status, row.url or "", commit)))
+        for repo_key in sorted(store.repo_runs.keys()):
+            runs = (store.repo_runs.get(repo_key) or [])[: self.TRAY_RUNS_PER_REPO]
+            entries.append(("repo", (repo_key,)))
+            for run in runs:
+                status = resolve_status(run)
+                name = run.get("name") or "Workflow"
+                branch = run.get("head_branch") or "—"
+                in_progress = (run.get("status") or "").lower() in ("in_progress", "queued")
+                duration = format_duration(
+                    run.get("run_started_at"), None if in_progress else run.get("updated_at")
+                ) or "—"
+                label = f"{name} · {branch} · {duration}"
+                head = run.get("head_commit") or {}
+                commit = (head.get("message") or "—").strip().split("\n")[0]
+                entries.append(("watch", (label, status, run.get("html_url") or "", commit)))
         return tray_menu_payload(entries)
 
     def update_tray_menu(self, force=False):
