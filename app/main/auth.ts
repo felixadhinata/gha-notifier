@@ -1,6 +1,6 @@
 /** Sign-in helpers: fetch a token from the `gh` CLI, or validate a pasted personal access token. */
 
-import { execFile } from "child_process";
+import { execFile } from "node:child_process";
 import { GitHubClient } from "./github";
 
 export function fetchGhCliToken(): Promise<string | null> {

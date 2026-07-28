@@ -301,6 +301,13 @@ body {
 .dot.idle { background: var(--text-faint); opacity: 0.5; }
 
 .add-repo-row { margin: 4px 8px 10px; flex: none; }
+
+.sidebar-footer {
+  flex: none;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border);
+}
+.sidebar-footer .hint { margin: 0; color: var(--text-faint); }
 .add-repo-row .btn {
   width: 100%;
   justify-content: center;
@@ -463,7 +470,7 @@ table.runs td.num, table.runs th.num { font-variant-numeric: tabular-nums; }
   position: absolute;
   left: 8px;
   right: 8px;
-  bottom: 46px;
+  top: 84px;
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: 10px;
@@ -544,14 +551,7 @@ table.runs td.num, table.runs th.num { font-variant-numeric: tabular-nums; }
   flex-direction: column;
   gap: 10px;
 }
-.modal-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 0 0 4px;
-}
-.modal-header h3 { margin: 0; font-size: 15px; }
+.modal h3 { margin: 0 0 4px; font-size: 15px; }
 .modal input[type="text"],
 .modal input[type="password"],
 .modal input[type="number"],

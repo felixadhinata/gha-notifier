@@ -9,10 +9,12 @@ export interface Settings {
   theme: Theme;
 }
 
+export type SignInResult = { ok: true; user: GithubUser } | { ok: false; error: string };
+
 export interface GhaApi {
   getAuthState(): Promise<{ user: GithubUser | null }>;
-  signInWithGh(): Promise<{ ok: boolean; error?: string; user?: GithubUser }>;
-  signInWithToken(token: string): Promise<{ ok: boolean; error?: string; user?: GithubUser }>;
+  signInWithGh(): Promise<SignInResult>;
+  signInWithToken(token: string): Promise<SignInResult>;
   signOut(): Promise<{ ok: boolean }>;
 
   listRepos(): Promise<{ repos: string[]; runsByRepo: Record<string, GithubRun[]> }>;

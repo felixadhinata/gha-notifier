@@ -1,5 +1,5 @@
+import * as path from "node:path";
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
-import * as path from "path";
 
 import { fetchGhCliToken, validateToken } from "./auth";
 import {
@@ -15,6 +15,16 @@ import {
 } from "./config";
 import { GitHubClient, type GithubRun } from "./github";
 import { pollAllRepos, type RepoStatus, repoStatusFromRuns } from "./repoService";
+
+// Custom flag distinguishing "hide to tray" from an actual quit, so window "close" can
+// be intercepted while still allowing the tray's Quit item to exit for real.
+declare global {
+  namespace Electron {
+    interface App {
+      isQuitting?: boolean;
+    }
+  }
+}
 
 const ASSETS_DIR = path.join(__dirname, "..", "..", "assets");
 const isTrayOnly = process.argv.includes("--tray-only");
@@ -81,7 +91,7 @@ function createWindow(): void {
   mainWindow.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
 
   mainWindow.on("close", (event) => {
-    if ((app as any).isQuitting) return;
+    if (app.isQuitting) return;
     event.preventDefault();
     mainWindow?.hide();
   });
@@ -119,8 +129,12 @@ function rebuildTrayMenu(): void {
 
   const byRepo = new Map<string, TrayWatchEntry[]>();
   for (const entry of trayWatches.values()) {
-    if (!byRepo.has(entry.repoKey)) byRepo.set(entry.repoKey, []);
-    byRepo.get(entry.repoKey)!.push(entry);
+    let entries = byRepo.get(entry.repoKey);
+    if (!entries) {
+      entries = [];
+      byRepo.set(entry.repoKey, entries);
+    }
+    entries.push(entry);
   }
   for (const entries of byRepo.values()) {
     entries.sort((a, b) => (b.run.created_at || "").localeCompare(a.run.created_at || ""));
@@ -168,7 +182,7 @@ function rebuildTrayMenu(): void {
     {
       label: "Quit",
       click: () => {
-        (app as any).isQuitting = true;
+        app.isQuitting = true;
         app.quit();
       },
     },
@@ -340,5 +354,5 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  (app as any).isQuitting = true;
+  app.isQuitting = true;
 });

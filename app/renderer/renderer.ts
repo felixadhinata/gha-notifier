@@ -34,10 +34,12 @@ interface Settings {
  * (CommonJS) and renderer (ESM) tsc programs causes each to clobber the other's JS output
  * for preload.js.
  */
+type SignInResult = { ok: true; user: GithubUser } | { ok: false; error: string };
+
 interface GhaApi {
   getAuthState(): Promise<{ user: GithubUser | null }>;
-  signInWithGh(): Promise<{ ok: boolean; error?: string; user?: GithubUser }>;
-  signInWithToken(token: string): Promise<{ ok: boolean; error?: string; user?: GithubUser }>;
+  signInWithGh(): Promise<SignInResult>;
+  signInWithToken(token: string): Promise<SignInResult>;
   signOut(): Promise<{ ok: boolean }>;
 
   listRepos(): Promise<{ repos: string[]; runsByRepo: Record<string, GithubRun[]> }>;
@@ -136,7 +138,7 @@ signinGhBtn.addEventListener("click", async () => {
     return;
   }
   signinStatus.textContent = "";
-  renderAuth(result.user!);
+  renderAuth(result.user);
   void loadRepos();
 });
 
@@ -167,7 +169,7 @@ function renderRepoList(): void {
   repoListEl.innerHTML = "";
   for (const repoKey of repos) {
     const li = document.createElement("li");
-    li.className = "repo-item" + (repoKey === selectedRepo ? " selected" : "");
+    li.className = `repo-item${repoKey === selectedRepo ? " selected" : ""}`;
 
     const dot = document.createElement("span");
     dot.className = `dot ${statusClass(repoStatus(runsByRepo[repoKey]))}`;
@@ -417,9 +419,9 @@ function buildRunsTable(runs: GithubRun[]): HTMLTableElement {
         <th></th>
       </tr>
     </thead>
-    <tbody></tbody>
   `;
-  const tbody = table.querySelector("tbody")!;
+  const tbody = document.createElement("tbody");
+  table.appendChild(tbody);
   for (const run of runs) {
     const tr = document.createElement("tr");
     const inProgress = ["in_progress", "queued"].includes((run.status || "").toLowerCase());
@@ -588,7 +590,7 @@ tokenConfirm.addEventListener("click", async () => {
     return;
   }
   signinStatus.textContent = "";
-  renderAuth(result.user!);
+  renderAuth(result.user);
   void loadRepos();
 });
 

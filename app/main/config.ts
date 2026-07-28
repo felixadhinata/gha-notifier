@@ -1,9 +1,9 @@
 /** App configuration: load/save JSON config, monitored-repo list helpers. */
 
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { app } from "electron";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
 
 export interface GithubUser {
   login: string;
@@ -45,14 +45,15 @@ export function loadConfig(): AppConfig {
     const raw = JSON.parse(fs.readFileSync(configPath, "utf-8")) as Partial<AppConfig> & {
       repos?: unknown;
     };
-    const merged: AppConfig = { ...DEFAULT_CONFIG };
-    for (const key of Object.keys(DEFAULT_CONFIG) as (keyof AppConfig)[]) {
-      if (key in raw && raw[key] !== undefined) {
-        (merged as any)[key] = (raw as any)[key];
-      }
-    }
-    merged.repos = normalizeRepos(raw.repos);
-    return merged;
+    return {
+      pollIntervalSec: raw.pollIntervalSec ?? DEFAULT_CONFIG.pollIntervalSec,
+      notifyEnabled: raw.notifyEnabled ?? DEFAULT_CONFIG.notifyEnabled,
+      openOnStartup: raw.openOnStartup ?? DEFAULT_CONFIG.openOnStartup,
+      theme: raw.theme ?? DEFAULT_CONFIG.theme,
+      repos: normalizeRepos(raw.repos),
+      token: raw.token ?? DEFAULT_CONFIG.token,
+      user: raw.user ?? DEFAULT_CONFIG.user,
+    };
   } catch {
     return { ...DEFAULT_CONFIG };
   }
@@ -100,8 +101,9 @@ function normalizeRepos(raw: unknown): string[] {
     if (typeof entry === "string" && entry.trim()) {
       repos.push(entry.trim());
     } else if (entry && typeof entry === "object") {
-      const owner = String((entry as any).owner || "").trim();
-      const repo = String((entry as any).repo || "").trim();
+      const record = entry as Record<string, unknown>;
+      const owner = String(record.owner || "").trim();
+      const repo = String(record.repo || "").trim();
       if (owner && repo) repos.push(`${owner}/${repo}`);
     }
   }

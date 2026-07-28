@@ -34,12 +34,11 @@
           <span class="section-label">Monitored repos</span>
           <div id="repos-spinner" class="spinner" hidden></div>
         </div>
-        <ul id="repo-list" class="repo-list"></ul>
         <div class="add-repo-row">
           <button id="add-repo-btn" class="btn">+ Add repository</button>
         </div>
 
-        <!-- Add-repository popover, anchored above the button -->
+        <!-- Add-repository popover, anchored below the button -->
         <div id="add-repo-popover" class="add-popover" hidden>
           <label for="add-repo-input">GitHub repository</label>
           <input id="add-repo-input" type="text" placeholder="owner/repo" autocomplete="off" />
@@ -49,6 +48,12 @@
             <button class="btn subtle" data-action="cancel">Cancel</button>
             <button id="add-repo-confirm" class="btn primary" disabled>Add</button>
           </div>
+        </div>
+
+        <ul id="repo-list" class="repo-list"></ul>
+
+        <div class="sidebar-footer">
+          <span id="app-version" class="hint small"></span>
         </div>
       </aside>
 
@@ -98,10 +103,7 @@
   <!-- Settings modal -->
   <div id="settings-modal" class="modal-backdrop" hidden>
     <div class="modal">
-      <div class="modal-header">
-        <h3>Settings</h3>
-        <span id="app-version" class="hint small"></span>
-      </div>
+      <h3>Settings</h3>
       <label class="field-row">
         <span>Theme</span>
         <select id="settings-theme">

@@ -86,7 +86,7 @@ interface PollResult {
 export async function pollAllRepos(config: AppConfig, client: GitHubClient | null): Promise<PollResult> {
   const runsByRepo: Record<string, GithubRun[]> = {};
   const login = config.user?.login;
-  if (!login || !client || !client.token) {
+  if (!login || !client?.token) {
     return { runsByRepo };
   }
   for (const repoKey of config.repos || []) {
