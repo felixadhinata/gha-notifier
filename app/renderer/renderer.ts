@@ -6,6 +6,7 @@ interface GithubRun {
   status: string;
   conclusion: string | null;
   head_branch: string;
+  created_at: string;
   run_started_at: string | null;
   updated_at: string;
   html_url: string;
@@ -82,6 +83,20 @@ const addRepoBtn = $<HTMLButtonElement>("add-repo-btn");
 const runsTitle = $<HTMLHeadingElement>("runs-title");
 const runsBody = $<HTMLDivElement>("runs-body");
 const refreshBtn = $<HTMLButtonElement>("refresh-btn");
+
+const runsFiltersEl = $<HTMLDivElement>("runs-filters");
+const filterWorkflowEl = $<HTMLInputElement>("filter-workflow");
+const filterBranchEl = $<HTMLInputElement>("filter-branch");
+const filterStatusEl = $<HTMLSelectElement>("filter-status");
+const filterCommitEl = $<HTMLInputElement>("filter-commit");
+
+const paginationEl = $<HTMLDivElement>("runs-pagination");
+const pagePrevBtn = $<HTMLButtonElement>("page-prev");
+const pageNextBtn = $<HTMLButtonElement>("page-next");
+const pageLabelEl = $<HTMLSpanElement>("page-label");
+
+const RUNS_PAGE_SIZE = 15;
+let currentPage = 1;
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -171,7 +186,10 @@ function renderRepoList(): void {
 
     li.append(dot, name, removeBtn);
     li.addEventListener("click", () => {
+      if (selectedRepo === repoKey) return;
       selectedRepo = repoKey;
+      currentPage = 1;
+      clearFilters();
       renderRepoList();
       renderRunsPane();
     });
@@ -182,7 +200,11 @@ function renderRepoList(): void {
 async function onRemoveRepo(repoKey: string): Promise<void> {
   const result = await gha.removeRepo(repoKey);
   repos = result.repos;
-  if (selectedRepo === repoKey) selectedRepo = null;
+  if (selectedRepo === repoKey) {
+    selectedRepo = null;
+    currentPage = 1;
+    clearFilters();
+  }
   delete runsByRepo[repoKey];
   renderRepoList();
   renderRunsPane();
@@ -229,13 +251,78 @@ function formatDuration(startedAt: string | null, updatedAt: string | null): str
   return minutes === 0 ? `${secs}s` : `${minutes}m ${secs}s`;
 }
 
-function formatTriggered(startedAt: string | null): string {
-  if (!startedAt) return "—";
-  const d = new Date(startedAt);
+function formatAbsolute(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+function formatRelative(iso: string | null): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  const now = new Date();
+  const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (diffSec < 60) return "just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (date.toDateString() === now.toDateString()) return `${diffHr} hr ago`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  const diffDays = Math.floor(diffHr / 24);
+  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  return formatAbsolute(iso);
+}
+
+// ---------------------------------------------------------------------------
+// Filters + pagination
+// ---------------------------------------------------------------------------
+
+function clearFilters(): void {
+  filterWorkflowEl.value = "";
+  filterBranchEl.value = "";
+  filterStatusEl.value = "";
+  filterCommitEl.value = "";
+}
+
+function applyFilters(runs: GithubRun[]): GithubRun[] {
+  const workflowQ = filterWorkflowEl.value.trim().toLowerCase();
+  const branchQ = filterBranchEl.value.trim().toLowerCase();
+  const statusQ = filterStatusEl.value; // "" | "running" | "success" | "fail"
+  const commitQ = filterCommitEl.value.trim().toLowerCase();
+
+  return runs.filter((run) => {
+    if (workflowQ && !(run.name || "").toLowerCase().includes(workflowQ)) return false;
+    if (branchQ && !(run.head_branch || "").toLowerCase().includes(branchQ)) return false;
+    if (statusQ && statusClass(repoStatus([run])) !== statusQ) return false;
+    if (commitQ && !(run.head_commit?.message || "").toLowerCase().includes(commitQ)) return false;
+    return true;
+  });
+}
+
+for (const el of [filterWorkflowEl, filterBranchEl, filterCommitEl]) {
+  el.addEventListener("input", () => {
+    currentPage = 1;
+    renderRunsPane();
+  });
+}
+filterStatusEl.addEventListener("change", () => {
+  currentPage = 1;
+  renderRunsPane();
+});
+
+pagePrevBtn.addEventListener("click", () => {
+  currentPage = Math.max(1, currentPage - 1);
+  renderRunsPane();
+});
+pageNextBtn.addEventListener("click", () => {
+  currentPage += 1;
+  renderRunsPane();
+});
 
 function renderRunsPane(): void {
   refreshBtn.disabled = selectedRepo === null;
@@ -243,6 +330,8 @@ function renderRunsPane(): void {
 
   if (selectedRepo === null) {
     runsTitle.textContent = "";
+    runsFiltersEl.hidden = true;
+    paginationEl.hidden = true;
     runsBody.appendChild(
       emptyPane("\u{1F441}", "Select a repository", "Pick one on the left to see your recent workflow runs.")
     );
@@ -253,6 +342,8 @@ function renderRunsPane(): void {
   const runs = runsByRepo[selectedRepo];
 
   if (runs === undefined) {
+    runsFiltersEl.hidden = true;
+    paginationEl.hidden = true;
     const loading = document.createElement("div");
     loading.className = "plain-message";
     loading.textContent = "Loading…";
@@ -260,6 +351,8 @@ function renderRunsPane(): void {
     return;
   }
   if (runs.length === 0) {
+    runsFiltersEl.hidden = true;
+    paginationEl.hidden = true;
     const msg = document.createElement("div");
     msg.className = "plain-message";
     msg.textContent = "No workflow runs found for you in this repository.";
@@ -267,7 +360,29 @@ function renderRunsPane(): void {
     return;
   }
 
-  runsBody.appendChild(buildRunsTable(runs));
+  runsFiltersEl.hidden = false;
+  const filtered = applyFilters(runs);
+
+  if (filtered.length === 0) {
+    paginationEl.hidden = true;
+    const msg = document.createElement("div");
+    msg.className = "plain-message";
+    msg.textContent = "No runs match these filters.";
+    runsBody.appendChild(msg);
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / RUNS_PAGE_SIZE));
+  currentPage = Math.min(currentPage, totalPages);
+  const start = (currentPage - 1) * RUNS_PAGE_SIZE;
+  const pageRuns = filtered.slice(start, start + RUNS_PAGE_SIZE);
+
+  runsBody.appendChild(buildRunsTable(pageRuns));
+
+  paginationEl.hidden = totalPages <= 1;
+  pagePrevBtn.disabled = currentPage <= 1;
+  pageNextBtn.disabled = currentPage >= totalPages;
+  pageLabelEl.textContent = `Page ${currentPage} of ${totalPages} (${filtered.length} runs)`;
 }
 
 function emptyPane(mark: string, title: string, description: string): HTMLElement {
@@ -293,6 +408,7 @@ function buildRunsTable(runs: GithubRun[]): HTMLTableElement {
         <th>Status</th>
         <th class="num">Duration</th>
         <th>Commit</th>
+        <th class="num">Started At</th>
         <th class="num">Triggered</th>
         <th></th>
       </tr>
@@ -313,7 +429,8 @@ function buildRunsTable(runs: GithubRun[]): HTMLTableElement {
       <td><span class="status-pill ${statusClass(status)}"><span class="dot ${statusClass(status)}"></span>${statusText}</span></td>
       <td class="num">${escapeHtml(formatDuration(run.run_started_at, inProgress ? null : run.updated_at))}</td>
       <td><span class="commit-cell" title="${escapeHtml(commit)}">${escapeHtml(commit)}</span></td>
-      <td class="num">${escapeHtml(formatTriggered(run.run_started_at))}</td>
+      <td class="num">${escapeHtml(formatAbsolute(run.run_started_at))}</td>
+      <td class="num">${escapeHtml(formatRelative(run.created_at))}</td>
       <td></td>
     `;
     const openCell = tr.lastElementChild as HTMLTableCellElement;
@@ -505,6 +622,8 @@ settingsSignout.addEventListener("click", async () => {
   repos = [];
   runsByRepo = {};
   selectedRepo = null;
+  currentPage = 1;
+  clearFilters();
   renderAuth(null);
 });
 

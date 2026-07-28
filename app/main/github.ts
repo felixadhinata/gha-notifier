@@ -13,6 +13,7 @@ export interface GithubRun {
   status: string; // "queued" | "in_progress" | "completed"
   conclusion: string | null;
   head_branch: string;
+  created_at: string;
   run_started_at: string | null;
   updated_at: string;
   html_url: string;
@@ -44,7 +45,7 @@ export class GitHubClient {
     return this.requestJson(`${GITHUB_API}/user/repos?per_page=${perPage}&sort=updated`);
   }
 
-  async getRunsForActor(owner: string, repo: string, actor: string, perPage = 20): Promise<GithubRun[]> {
+  async getRunsForActor(owner: string, repo: string, actor: string, perPage = 100): Promise<GithubRun[]> {
     const url =
       `${GITHUB_API}/repos/${owner}/${repo}/actions/runs` +
       `?per_page=${perPage}&actor=${encodeURIComponent(actor)}`;

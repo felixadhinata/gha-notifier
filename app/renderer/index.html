@@ -58,8 +58,24 @@
           <div class="spacer"></div>
           <button id="refresh-btn" class="btn icon" title="Refresh" disabled>&#8635;</button>
         </div>
+        <div id="runs-filters" class="runs-filters" hidden>
+          <input id="filter-workflow" type="text" placeholder="Workflow" autocomplete="off" />
+          <input id="filter-branch" type="text" placeholder="Branch" autocomplete="off" />
+          <select id="filter-status">
+            <option value="">Any status</option>
+            <option value="running">Running</option>
+            <option value="success">Success</option>
+            <option value="fail">Failed</option>
+          </select>
+          <input id="filter-commit" type="text" placeholder="Commit message" autocomplete="off" />
+        </div>
         <div class="runs-scroll">
           <div id="runs-body" class="runs-body"></div>
+        </div>
+        <div id="runs-pagination" class="runs-pagination" hidden>
+          <button id="page-prev" class="btn icon" title="Previous page">&#8249;</button>
+          <span id="page-label" class="page-label"></span>
+          <button id="page-next" class="btn icon" title="Next page">&#8250;</button>
         </div>
       </section>
     </main>
