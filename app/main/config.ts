@@ -28,7 +28,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   user: null,
 };
 
-export function getConfigPath(): string {
+function getConfigPath(): string {
   return path.join(app.getPath("userData"), "config.json");
 }
 

@@ -2,7 +2,7 @@ import * as path from "path";
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
 
 import { fetchGhCliToken, validateToken } from "./auth";
-import { AppConfig, addRepo, getRepos, loadConfig, removeRepo, saveConfig, setOpenOnStartup } from "./config";
+import { AppConfig, DEFAULT_CONFIG, addRepo, getRepos, loadConfig, removeRepo, saveConfig, setOpenOnStartup } from "./config";
 import { GitHubClient } from "./github";
 import { pollAllRepos, repoStatusFromRuns, RepoStatus } from "./repoService";
 import { GithubRun } from "./github";
@@ -180,7 +180,7 @@ async function signInWithToken(token: string) {
 }
 
 ipcMain.handle("auth:sign-out", () => {
-  config = { pollIntervalSec: 20, notifyEnabled: true, openOnStartup: false, repos: [], token: null, user: null };
+  config = { ...DEFAULT_CONFIG };
   saveConfig(config);
   client = new GitHubClient(null);
   runsByRepo = {};

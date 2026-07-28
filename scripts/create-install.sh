@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build and install GHA Notifier as a .deb on this machine.
 # Run from inside the repo (where you already have it checked out):
-#   ./scripts/install.sh
+#   ./scripts/create-install.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

@@ -3,7 +3,7 @@
 // Overridable for local testing against a mock server; defaults to the real API.
 const GITHUB_API = process.env.GHA_NOTIFIER_API_BASE || "https://api.github.com";
 
-export interface GithubActor {
+interface GithubActor {
   login: string;
 }
 

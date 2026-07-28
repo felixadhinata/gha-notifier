@@ -10,7 +10,7 @@ import { GitHubClient, GithubRun } from "./github";
 // GitHub's max per_page. Fetching the full page (instead of a small slice) means the
 // renderer has enough history in memory to paginate/filter the runs table client-side
 // without extra round-trips.
-export const RUNS_PER_REPO = 100;
+const RUNS_PER_REPO = 100;
 
 /** run id -> currently in-progress/queued, tracked so we notify exactly once per completed run. */
 const trackedActiveRunIds = new Set<number>();
@@ -20,7 +20,7 @@ function isInProgress(run: GithubRun): boolean {
   return status === "in_progress" || status === "queued";
 }
 
-export async function fetchMyRuns(
+async function fetchMyRuns(
   client: GitHubClient,
   owner: string,
   repo: string,
@@ -78,7 +78,7 @@ function notifyCompleted(repoKey: string, run: GithubRun): void {
   notification.show();
 }
 
-export interface PollResult {
+interface PollResult {
   runsByRepo: Record<string, GithubRun[]>;
 }
 
