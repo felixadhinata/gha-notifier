@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+<title>GHA Notifier</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="identity">
+        <div id="avatar" class="avatar" hidden></div>
+        <span id="auth-label">Sign in to get started</span>
+      </div>
+      <div class="spacer"></div>
+      <button id="settings-btn" class="btn icon" title="Settings" hidden>&#9881;</button>
+    </header>
+
+    <section id="signin-screen" class="signin-screen">
+      <div class="mark">&#9737;</div>
+      <h2>Sign in to get started</h2>
+      <p class="hint">Sign in with GitHub CLI or a Personal Access Token.</p>
+      <div class="signin-actions">
+        <button id="signin-gh-btn" class="btn primary">Sign in with GitHub CLI</button>
+        <button id="signin-token-btn" class="btn">Sign in with token</button>
+      </div>
+      <div id="signin-status" class="signin-status"></div>
+    </section>
+
+    <main id="main-view" class="main-view" hidden>
+      <aside class="repos-pane">
+        <div class="pane-head">
+          <span class="section-label">Monitored repos</span>
+          <div id="repos-spinner" class="spinner" hidden></div>
+        </div>
+        <div class="add-repo-row">
+          <button id="add-repo-btn" class="btn">+ Add repository</button>
+        </div>
+
+        <!-- Add-repository popover, anchored below the button -->
+        <div id="add-repo-popover" class="add-popover" hidden>
+          <label for="add-repo-input">GitHub repository</label>
+          <input id="add-repo-input" type="text" placeholder="owner/repo" autocomplete="off" />
+          <ul id="add-repo-suggestions" class="suggestion-list"></ul>
+          <p id="add-repo-hint" class="hint small">Loading your repositories…</p>
+          <div class="row">
+            <button class="btn subtle" data-action="cancel">Cancel</button>
+            <button id="add-repo-confirm" class="btn primary" disabled>Add</button>
+          </div>
+        </div>
+
+        <ul id="repo-list" class="repo-list"></ul>
+
+        <div class="sidebar-footer">
+          <span id="app-version" class="hint small"></span>
+        </div>
+      </aside>
+
+      <section class="runs-pane">
+        <div class="runs-head">
+          <h2 id="runs-title"></h2>
+          <div class="spacer"></div>
+          <button id="refresh-btn" class="btn icon" title="Refresh" disabled>&#8635;</button>
+        </div>
+        <div id="runs-filters" class="runs-filters" hidden>
+          <input id="filter-workflow" type="text" placeholder="Workflow" autocomplete="off" />
+          <input id="filter-branch" type="text" placeholder="Branch" autocomplete="off" />
+          <select id="filter-status">
+            <option value="">Any status</option>
+            <option value="running">Running</option>
+            <option value="success">Success</option>
+            <option value="fail">Failed</option>
+          </select>
+          <input id="filter-commit" type="text" placeholder="Commit message" autocomplete="off" />
+        </div>
+        <div class="runs-scroll">
+          <div id="runs-body" class="runs-body"></div>
+        </div>
+        <div id="runs-pagination" class="runs-pagination" hidden>
+          <button id="page-prev" class="btn icon" title="Previous page">&#8249;</button>
+          <span id="page-label" class="page-label"></span>
+          <button id="page-next" class="btn icon" title="Next page">&#8250;</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Sign in with token modal -->
+  <div id="token-modal" class="modal-backdrop" hidden>
+    <div class="modal">
+      <h3>Sign in with token</h3>
+      <p class="hint small">Required access: repo, workflow, read:user.</p>
+      <a href="#" id="token-link" class="link">Open GitHub: New Personal Access Token</a>
+      <input id="token-input" type="password" placeholder="Paste your token here" autocomplete="off" />
+      <div class="modal-actions">
+        <button class="btn" data-action="cancel">Cancel</button>
+        <button id="token-confirm" class="btn primary">Sign in</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div id="settings-modal" class="modal-backdrop" hidden>
+    <div class="modal">
+      <h3>Settings</h3>
+      <label class="field-row">
+        <span>Theme</span>
+        <select id="settings-theme">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <label class="field-row">
+        <span>Poll interval (seconds)</span>
+        <input id="settings-interval" type="number" min="10" max="300" step="1" />
+      </label>
+      <label class="check-row">
+        <input id="settings-notify" type="checkbox" />
+        <span>Enable desktop notifications</span>
+      </label>
+      <label class="check-row">
+        <input id="settings-startup" type="checkbox" />
+        <span>Open on program startup</span>
+      </label>
+      <div class="modal-actions">
+        <button id="settings-signout" class="btn subtle">Sign out</button>
+        <div class="spacer"></div>
+        <button class="btn" data-action="cancel">Cancel</button>
+        <button id="settings-confirm" class="btn primary">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="renderer.js"></script>
+</body>
+</html>

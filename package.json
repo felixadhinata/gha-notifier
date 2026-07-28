@@ -1,0 +1,48 @@
+{
+  "name": "gha-notifier",
+  "version": "1.0.0",
+  "description": "GitHub Actions notifier: pick repos to monitor, get notified when your own runs finish.",
+  "homepage": "https://github.com/felixadhinata/gha-notifier",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && mkdir -p dist/renderer && cp app/renderer/index.html app/renderer/style.css dist/renderer/",
+    "start": "npm run build && electron .",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run pack && bash scripts/package-deb.sh",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check ."
+  },
+  "author": {
+    "name": "GHA Notifier",
+    "email": "felixadhinata1@gmail.com"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.6",
+    "@types/node": "^22.0.0",
+    "electron": "^43.0.0",
+    "electron-builder": "^25.0.0",
+    "typescript": "^5.6.0"
+  },
+  "build": {
+    "appId": "com.gha.notifier",
+    "productName": "GHA Notifier",
+    "publish": null,
+    "files": [
+      "dist/**/*",
+      "assets/**/*"
+    ],
+    "directories": {
+      "output": "build"
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "category": "Utility",
+      "icon": "assets/icon.png",
+      "executableName": "gha-notifier"
+    }
+  }
+}

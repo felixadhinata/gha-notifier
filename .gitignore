@@ -1,19 +1,6 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.pyo
-.Python
-*.so
-.venv/
-venv/
-env/
-*.egg-info/
-.eggs/
+# Node / Electron
+node_modules/
 dist/
-*.egg
-
-# Build
 build/
 
 # IDE / editor
