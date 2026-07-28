@@ -1,11 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { GithubUser } from "./main/config";
+import type { GithubUser, Theme } from "./main/config";
 import type { GithubRun } from "./main/github";
 
 export interface Settings {
   pollIntervalSec: number;
   notifyEnabled: boolean;
   openOnStartup: boolean;
+  theme: Theme;
 }
 
 export interface GhaApi {

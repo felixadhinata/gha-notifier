@@ -19,10 +19,13 @@ interface GithubUser {
   id: number;
 }
 
+type Theme = "system" | "light" | "dark";
+
 interface Settings {
   pollIntervalSec: number;
   notifyEnabled: boolean;
   openOnStartup: boolean;
+  theme: Theme;
 }
 
 /**
@@ -598,23 +601,36 @@ const settingsInterval = $<HTMLInputElement>("settings-interval");
 const settingsNotify = $<HTMLInputElement>("settings-notify");
 const settingsStartup = $<HTMLInputElement>("settings-startup");
 const settingsConfirm = $<HTMLButtonElement>("settings-confirm");
+const settingsTheme = $<HTMLSelectElement>("settings-theme");
 const settingsSignout = $<HTMLButtonElement>("settings-signout");
 const appVersionEl = $<HTMLParagraphElement>("app-version");
+
+function applyTheme(theme: Theme): void {
+  if (theme === "system") {
+    delete document.documentElement.dataset.theme;
+  } else {
+    document.documentElement.dataset.theme = theme;
+  }
+}
 
 settingsBtn.addEventListener("click", async () => {
   const settings = await gha.getSettings();
   settingsInterval.value = String(settings.pollIntervalSec);
   settingsNotify.checked = settings.notifyEnabled;
   settingsStartup.checked = settings.openOnStartup;
+  settingsTheme.value = settings.theme;
   openModal(settingsModal);
 });
 
 settingsConfirm.addEventListener("click", async () => {
+  const theme = settingsTheme.value as Theme;
   await gha.saveSettings({
     pollIntervalSec: Math.max(10, Number(settingsInterval.value) || 20),
     notifyEnabled: settingsNotify.checked,
     openOnStartup: settingsStartup.checked,
+    theme,
   });
+  applyTheme(theme);
   closeModal(settingsModal);
 });
 
@@ -653,9 +669,9 @@ document.querySelectorAll<HTMLElement>(".modal-backdrop").forEach((backdrop) => 
 // ---------------------------------------------------------------------------
 
 (async function init() {
-  const { user } = await gha.getAuthState();
+  const [{ user }, settings, version] = await Promise.all([gha.getAuthState(), gha.getSettings(), gha.getVersion()]);
+  applyTheme(settings.theme);
   renderAuth(user);
   if (user) void loadRepos();
-  const version = await gha.getVersion();
   appVersionEl.textContent = `GHA Notifier v${version}`;
 })();

@@ -11,6 +11,7 @@ import {
   removeRepo,
   saveConfig,
   setOpenOnStartup,
+  type Theme,
 } from "./config";
 import { GitHubClient, type GithubRun } from "./github";
 import { pollAllRepos, type RepoStatus, repoStatusFromRuns } from "./repoService";
@@ -296,16 +297,18 @@ ipcMain.handle("settings:get", () => ({
   pollIntervalSec: config.pollIntervalSec,
   notifyEnabled: config.notifyEnabled,
   openOnStartup: config.openOnStartup,
+  theme: config.theme,
 }));
 
 ipcMain.handle("app:get-version", () => app.getVersion());
 
 ipcMain.handle(
   "settings:save",
-  (_event, settings: { pollIntervalSec: number; notifyEnabled: boolean; openOnStartup: boolean }) => {
+  (_event, settings: { pollIntervalSec: number; notifyEnabled: boolean; openOnStartup: boolean; theme: Theme }) => {
     config.pollIntervalSec = settings.pollIntervalSec;
     config.notifyEnabled = settings.notifyEnabled;
     config.openOnStartup = settings.openOnStartup;
+    config.theme = settings.theme;
     saveConfig(config);
     startPolling();
     setOpenOnStartup(config.openOnStartup, getAutostartExecCommand());

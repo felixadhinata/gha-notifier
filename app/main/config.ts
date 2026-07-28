@@ -10,10 +10,13 @@ export interface GithubUser {
   id: number;
 }
 
+export type Theme = "system" | "light" | "dark";
+
 export interface AppConfig {
   pollIntervalSec: number;
   notifyEnabled: boolean;
   openOnStartup: boolean;
+  theme: Theme;
   repos: string[];
   token: string | null;
   user: GithubUser | null;
@@ -23,6 +26,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   pollIntervalSec: 20,
   notifyEnabled: true,
   openOnStartup: false,
+  theme: "system",
   repos: [],
   token: null,
   user: null,

@@ -23,7 +23,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1c1a17;
     --surface: #262320;
     --surface-sunken: #201e1b;
@@ -46,6 +46,55 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
     color-scheme: dark;
   }
+}
+
+/* Explicit theme choice (Settings > Theme) wins over the OS preference above. */
+:root[data-theme="dark"] {
+  --bg: #1c1a17;
+  --surface: #262320;
+  --surface-sunken: #201e1b;
+  --border: #3a362f;
+  --border-strong: #4a453c;
+  --text: #ede9e2;
+  --text-muted: #a89f92;
+  --text-faint: #776f64;
+  --accent: #7fa8cc;
+  --accent-hover: #8fb4d6;
+  --accent-soft: #2a3944;
+  --accent-contrast: #14202a;
+  --success: #74c689;
+  --success-soft: #22321f;
+  --fail: #e0776a;
+  --fail-soft: #3a2420;
+  --running: #e0ac4e;
+  --running-soft: #3a2f18;
+  --focus: #7fa8cc;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f3f1;
+  --surface: #ffffff;
+  --surface-sunken: #ebe9e6;
+  --border: #dcd9d4;
+  --border-strong: #c7c3bc;
+  --text: #23201c;
+  --text-muted: #6f6a62;
+  --text-faint: #9b958b;
+  --accent: #2f5f8a;
+  --accent-hover: #3a6d9a;
+  --accent-soft: #e4edf4;
+  --accent-contrast: #ffffff;
+  --success: #2f8f4e;
+  --success-soft: #e3f3e6;
+  --fail: #c0392b;
+  --fail-soft: #fbe7e4;
+  --running: #b9770e;
+  --running-soft: #faf0d9;
+  --focus: #2f5f8a;
+  --shadow: 0 1px 2px rgba(30, 25, 15, 0.06), 0 8px 24px rgba(30, 25, 15, 0.10);
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -498,7 +547,8 @@ table.runs td.num, table.runs th.num { font-variant-numeric: tabular-nums; }
 .modal h3 { margin: 0 0 4px; font-size: 15px; }
 .modal input[type="text"],
 .modal input[type="password"],
-.modal input[type="number"] {
+.modal input[type="number"],
+.modal select {
   font: inherit;
   font-size: 13px;
   padding: 8px 10px;
@@ -508,7 +558,7 @@ table.runs td.num, table.runs th.num { font-variant-numeric: tabular-nums; }
   color: var(--text);
   width: 100%;
 }
-.modal input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.modal input:focus-visible, .modal select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .link { color: var(--accent); font-size: 12.5px; text-decoration: none; }
 .link:hover { text-decoration: underline; }
 .field-row {
@@ -519,6 +569,7 @@ table.runs td.num, table.runs th.num { font-variant-numeric: tabular-nums; }
   font-size: 13px;
 }
 .field-row input { width: 80px; }
+.field-row select { width: auto; }
 .check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
 .version-line { text-align: center; margin: 2px 0 0; color: var(--text-faint); }
