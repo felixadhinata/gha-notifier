@@ -8,7 +8,6 @@ import { pollAllRepos, repoStatusFromRuns, RepoStatus } from "./repoService";
 import { GithubRun } from "./github";
 
 const ASSETS_DIR = path.join(__dirname, "..", "..", "assets");
-const TRAY_RUNS_PER_REPO = 8;
 const isTrayOnly = process.argv.includes("--tray-only");
 
 let config: AppConfig = loadConfig();
@@ -18,6 +17,38 @@ let tray: Tray | null = null;
 let pollTimer: NodeJS.Timeout | null = null;
 let isPolling = false;
 let runsByRepo: Record<string, GithubRun[]> = {};
+
+// ---------------------------------------------------------------------------
+// Tray watch list: only ever gains an entry when a run is caught in_progress/
+// queued (never backfilled from history), and keeps showing it — with its
+// final status — until "Clear completed" is clicked. Session-only, not
+// persisted, same as the notification-dedup tracking in repoService.
+// ---------------------------------------------------------------------------
+
+interface TrayWatchEntry {
+  repoKey: string;
+  run: GithubRun;
+}
+
+const trayWatches = new Map<number, TrayWatchEntry>();
+
+function isRunInProgress(run: GithubRun): boolean {
+  const status = (run.status || "").toLowerCase();
+  return status === "in_progress" || status === "queued";
+}
+
+function updateTrayWatches(): void {
+  for (const repoKey of getRepos(config)) {
+    for (const run of runsByRepo[repoKey] || []) {
+      const existing = trayWatches.get(run.id);
+      if (existing) {
+        existing.run = run;
+      } else if (isRunInProgress(run)) {
+        trayWatches.set(run.id, { repoKey, run });
+      }
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Window
@@ -77,10 +108,20 @@ function rebuildTrayMenu(): void {
   if (!tray) return;
   tray.setImage(nativeImage.createFromPath(trayIconPath(pickOverallStatus())));
 
+  const byRepo = new Map<string, TrayWatchEntry[]>();
+  for (const entry of trayWatches.values()) {
+    if (!byRepo.has(entry.repoKey)) byRepo.set(entry.repoKey, []);
+    byRepo.get(entry.repoKey)!.push(entry);
+  }
+  for (const entries of byRepo.values()) {
+    entries.sort((a, b) => (b.run.created_at || "").localeCompare(a.run.created_at || ""));
+  }
+
   const template: Electron.MenuItemConstructorOptions[] = [];
   for (const repoKey of getRepos(config)) {
-    const runs = (runsByRepo[repoKey] || []).slice(0, TRAY_RUNS_PER_REPO);
-    const submenu: Electron.MenuItemConstructorOptions[] = runs.map((run) => {
+    const entries = byRepo.get(repoKey);
+    if (!entries || entries.length === 0) continue;
+    const submenu: Electron.MenuItemConstructorOptions[] = entries.map(({ run }) => {
       const status = repoStatusFromRuns([run]);
       const emoji = { yellow: "🟡", green: "🟢", red: "🔴", gray: "⚪" }[status];
       const branch = run.head_branch || "—";
@@ -92,13 +133,26 @@ function rebuildTrayMenu(): void {
         click: () => run.html_url && shell.openExternal(run.html_url),
       };
     });
-    template.push({
-      label: repoKey,
-      submenu: submenu.length ? submenu : [{ label: "No runs yet", enabled: false }],
-    });
+    template.push({ label: repoKey, submenu });
   }
-  if (template.length) template.push({ type: "separator" });
+  if (template.length === 0) {
+    template.push({ label: "No runs in progress", enabled: false });
+  }
+
+  const hasCompleted = [...trayWatches.values()].some((e) => !isRunInProgress(e.run));
   template.push(
+    { type: "separator" },
+    {
+      label: "Clear completed",
+      enabled: hasCompleted,
+      click: () => {
+        for (const [id, entry] of trayWatches) {
+          if (!isRunInProgress(entry.run)) trayWatches.delete(id);
+        }
+        rebuildTrayMenu();
+      },
+    },
+    { type: "separator" },
     { label: "Open", click: showWindow },
     { label: "Refresh", click: () => void refreshRuns() },
     { type: "separator" },
@@ -131,6 +185,7 @@ async function refreshRuns(): Promise<void> {
   try {
     const result = await pollAllRepos(config, client);
     runsByRepo = result.runsByRepo;
+    updateTrayWatches();
     rebuildTrayMenu();
     mainWindow?.webContents.send("repo-runs-updated", runsByRepo);
   } finally {
@@ -184,6 +239,7 @@ ipcMain.handle("auth:sign-out", () => {
   saveConfig(config);
   client = new GitHubClient(null);
   runsByRepo = {};
+  trayWatches.clear();
   startPolling();
   rebuildTrayMenu();
   return { ok: true };
@@ -205,6 +261,9 @@ ipcMain.handle("repos:remove", (_event, repoKey: string) => {
   if (removed) {
     saveConfig(config);
     delete runsByRepo[repoKey];
+    for (const [id, entry] of trayWatches) {
+      if (entry.repoKey === repoKey) trayWatches.delete(id);
+    }
     rebuildTrayMenu();
   }
   return { removed, repos: getRepos(config) };
