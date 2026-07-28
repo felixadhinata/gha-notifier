@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Tag the current version, push the tag, build the .deb, and publish a GitHub
+# release with the .deb attached. Run this on your own machine (needs the gh
+# CLI, authenticated) — it can't be run from the sandbox that generated it,
+# since that session's git remote rejects tag pushes and has no release API
+# access.
+#
+# Usage: bash scripts/publish-release.sh
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+if ! command -v gh >/dev/null 2>&1; then
+  echo "gh (GitHub CLI) is required. Install it: https://cli.github.com/" >&2
+  exit 1
+fi
+if ! gh auth status >/dev/null 2>&1; then
+  echo "gh is not authenticated. Run: gh auth login" >&2
+  exit 1
+fi
+
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$BRANCH" != "main" ]; then
+  echo "You're on '$BRANCH', not 'main'. Switch to main first: git checkout main && git pull" >&2
+  exit 1
+fi
+if [ -n "$(git status --porcelain)" ]; then
+  echo "Working tree has uncommitted changes. Commit or stash first." >&2
+  exit 1
+fi
+
+git fetch origin main
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+  echo "Local main is not in sync with origin/main. Run: git pull origin main" >&2
+  exit 1
+fi
+
+VERSION="$(node -p "require('./package.json').version")"
+TAG="v${VERSION}"
+
+if git rev-parse "$TAG" >/dev/null 2>&1; then
+  echo "Tag $TAG already exists locally."
+else
+  git tag -a "$TAG" -m "$TAG"
+  echo "Created tag $TAG"
+fi
+
+if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
+  echo "Tag $TAG already exists on origin, skipping push."
+else
+  git push origin "$TAG"
+  echo "Pushed tag $TAG"
+fi
+
+echo "==> Building .deb (this runs the full pack + package step, may take a few minutes)"
+npm run dist
+
+DEB_PATH="build/gha-notifier_${VERSION}_amd64.deb"
+if [ ! -f "$DEB_PATH" ]; then
+  echo "Expected $DEB_PATH but it wasn't produced by the build." >&2
+  exit 1
+fi
+
+if gh release view "$TAG" >/dev/null 2>&1; then
+  echo "Release $TAG already exists, uploading .deb to it."
+  gh release upload "$TAG" "$DEB_PATH" --clobber
+else
+  gh release create "$TAG" "$DEB_PATH" \
+    --title "$TAG" \
+    --notes "GHA Notifier ${VERSION}: Electron + TypeScript rewrite of the repo-only workflow-run notifier — auto-watch runs you triggered, tray notifications with a watch list, runs table with pagination/filters, System/Light/Dark theme, Biome-linted CI. See the .deb asset below to install."
+fi
+
+echo "Done: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/tag/${TAG}"
