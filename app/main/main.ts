@@ -95,13 +95,13 @@ function trayIconPath(status: RepoStatus): string {
   return path.join(ASSETS_DIR, `icon-${status}.png`);
 }
 
+/** Tray icon color, derived from the tray watch list (yellow > red > green > gray). */
 function pickOverallStatus(): RepoStatus {
-  const priority: RepoStatus[] = ["yellow", "red", "green", "gray"];
-  const present = new Set(getRepos(config).map((r) => repoStatusFromRuns(runsByRepo[r])));
-  for (const p of priority) {
-    if (present.has(p)) return p;
-  }
-  return "gray";
+  const entries = [...trayWatches.values()];
+  if (entries.length === 0) return "gray";
+  if (entries.some((e) => isRunInProgress(e.run))) return "yellow";
+  if (entries.some((e) => e.run.conclusion !== "success")) return "red";
+  return "green";
 }
 
 function rebuildTrayMenu(): void {
