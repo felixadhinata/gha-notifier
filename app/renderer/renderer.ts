@@ -603,7 +603,7 @@ const settingsStartup = $<HTMLInputElement>("settings-startup");
 const settingsConfirm = $<HTMLButtonElement>("settings-confirm");
 const settingsTheme = $<HTMLSelectElement>("settings-theme");
 const settingsSignout = $<HTMLButtonElement>("settings-signout");
-const appVersionEl = $<HTMLParagraphElement>("app-version");
+const appVersionEl = $<HTMLSpanElement>("app-version");
 
 function applyTheme(theme: Theme): void {
   if (theme === "system") {

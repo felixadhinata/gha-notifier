@@ -98,7 +98,10 @@
   <!-- Settings modal -->
   <div id="settings-modal" class="modal-backdrop" hidden>
     <div class="modal">
-      <h3>Settings</h3>
+      <div class="modal-header">
+        <h3>Settings</h3>
+        <span id="app-version" class="hint small"></span>
+      </div>
       <label class="field-row">
         <span>Theme</span>
         <select id="settings-theme">
@@ -125,7 +128,6 @@
         <button class="btn" data-action="cancel">Cancel</button>
         <button id="settings-confirm" class="btn primary">Apply</button>
       </div>
-      <p id="app-version" class="hint small version-line"></p>
     </div>
   </div>
 
