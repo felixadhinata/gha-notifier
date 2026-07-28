@@ -4,8 +4,8 @@
  */
 
 import { Notification, shell } from "electron";
-import { AppConfig } from "./config";
-import { GitHubClient, GithubRun } from "./github";
+import type { AppConfig } from "./config";
+import type { GitHubClient, GithubRun } from "./github";
 
 // GitHub's max per_page. Fetching the full page (instead of a small slice) means the
 // renderer has enough history in memory to paginate/filter the runs table client-side
@@ -25,7 +25,7 @@ async function fetchMyRuns(
   owner: string,
   repo: string,
   login: string,
-  perPage = RUNS_PER_REPO
+  perPage = RUNS_PER_REPO,
 ): Promise<GithubRun[]> {
   try {
     return await client.getRunsForActor(owner, repo, login, perPage);

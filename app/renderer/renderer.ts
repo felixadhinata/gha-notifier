@@ -334,7 +334,7 @@ function renderRunsPane(): void {
     runsFiltersEl.hidden = true;
     paginationEl.hidden = true;
     runsBody.appendChild(
-      emptyPane("\u{1F441}", "Select a repository", "Pick one on the left to see your recent workflow runs.")
+      emptyPane("\u{1F441}", "Select a repository", "Pick one on the left to see your recent workflow runs."),
     );
     return;
   }
@@ -563,7 +563,7 @@ const tokenLink = $<HTMLAnchorElement>("token-link");
 tokenLink.addEventListener("click", (e) => {
   e.preventDefault();
   void gha.openExternal(
-    "https://github.com/settings/tokens/new?scopes=repo,workflow,read:user&description=GHA+Notifier"
+    "https://github.com/settings/tokens/new?scopes=repo,workflow,read:user&description=GHA+Notifier",
   );
 });
 

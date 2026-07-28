@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { GithubRun } from "./main/github";
 import type { GithubUser } from "./main/config";
+import type { GithubRun } from "./main/github";
 
 export interface Settings {
   pollIntervalSec: number;

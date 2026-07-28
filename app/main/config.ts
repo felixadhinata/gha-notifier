@@ -1,9 +1,9 @@
 /** App configuration: load/save JSON config, monitored-repo list helpers. */
 
+import { app } from "electron";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { app } from "electron";
 
 export interface GithubUser {
   login: string;
@@ -64,7 +64,7 @@ export function saveConfig(config: AppConfig): void {
 export function getRepos(config: AppConfig): string[] {
   if (!Array.isArray(config.repos)) return [];
   const set = new Set(
-    config.repos.filter((r): r is string => typeof r === "string" && r.trim().length > 0).map((r) => r.trim())
+    config.repos.filter((r): r is string => typeof r === "string" && r.trim().length > 0).map((r) => r.trim()),
   );
   return Array.from(set).sort();
 }

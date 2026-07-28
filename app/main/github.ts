@@ -47,8 +47,7 @@ export class GitHubClient {
 
   async getRunsForActor(owner: string, repo: string, actor: string, perPage = 100): Promise<GithubRun[]> {
     const url =
-      `${GITHUB_API}/repos/${owner}/${repo}/actions/runs` +
-      `?per_page=${perPage}&actor=${encodeURIComponent(actor)}`;
+      `${GITHUB_API}/repos/${owner}/${repo}/actions/runs` + `?per_page=${perPage}&actor=${encodeURIComponent(actor)}`;
     const data = await this.requestJson<{ workflow_runs: GithubRun[] }>(url);
     return data.workflow_runs || [];
   }

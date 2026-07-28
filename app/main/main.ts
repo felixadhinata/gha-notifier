@@ -1,11 +1,19 @@
-import * as path from "path";
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
+import * as path from "path";
 
 import { fetchGhCliToken, validateToken } from "./auth";
-import { AppConfig, DEFAULT_CONFIG, addRepo, getRepos, loadConfig, removeRepo, saveConfig, setOpenOnStartup } from "./config";
-import { GitHubClient } from "./github";
-import { pollAllRepos, repoStatusFromRuns, RepoStatus } from "./repoService";
-import { GithubRun } from "./github";
+import {
+  type AppConfig,
+  addRepo,
+  DEFAULT_CONFIG,
+  getRepos,
+  loadConfig,
+  removeRepo,
+  saveConfig,
+  setOpenOnStartup,
+} from "./config";
+import { GitHubClient, type GithubRun } from "./github";
+import { pollAllRepos, type RepoStatus, repoStatusFromRuns } from "./repoService";
 
 const ASSETS_DIR = path.join(__dirname, "..", "..", "assets");
 const isTrayOnly = process.argv.includes("--tray-only");
@@ -162,7 +170,7 @@ function rebuildTrayMenu(): void {
         (app as any).isQuitting = true;
         app.quit();
       },
-    }
+    },
   );
   tray.setContextMenu(Menu.buildFromTemplate(template));
 }
@@ -302,7 +310,7 @@ ipcMain.handle(
     startPolling();
     setOpenOnStartup(config.openOnStartup, getAutostartExecCommand());
     return { ok: true };
-  }
+  },
 );
 
 ipcMain.handle("shell:open-external", (_event, url: string) => shell.openExternal(url));
