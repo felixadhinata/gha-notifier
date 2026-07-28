@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && mkdir -p dist/renderer && cp app/renderer/index.html app/renderer/style.css dist/renderer/",
     "start": "npm run build && electron .",
-    "dist": "npm run build && electron-builder"
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run pack && bash scripts/package-deb.sh"
   },
   "author": {
     "name": "GHA Notifier",
@@ -32,11 +33,10 @@
       "output": "build"
     },
     "linux": {
-      "target": ["deb"],
+      "target": ["dir"],
       "category": "Utility",
       "icon": "assets/icon.png",
-      "executableName": "gha-notifier",
-      "maintainer": "felixadhinata1@gmail.com"
+      "executableName": "gha-notifier"
     }
   }
 }

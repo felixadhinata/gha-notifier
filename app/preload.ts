@@ -22,6 +22,7 @@ export interface GhaApi {
 
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<{ ok: boolean }>;
+  getVersion(): Promise<string>;
 
   openExternal(url: string): Promise<void>;
   onRepoRunsUpdated(callback: (runsByRepo: Record<string, GithubRun[]>) => void): void;
@@ -41,6 +42,7 @@ const api: GhaApi = {
 
   getSettings: () => ipcRenderer.invoke("settings:get"),
   saveSettings: (settings) => ipcRenderer.invoke("settings:save", settings),
+  getVersion: () => ipcRenderer.invoke("app:get-version"),
 
   openExternal: (url) => ipcRenderer.invoke("shell:open-external", url),
   onRepoRunsUpdated: (callback) => {

@@ -231,6 +231,8 @@ ipcMain.handle("settings:get", () => ({
   openOnStartup: config.openOnStartup,
 }));
 
+ipcMain.handle("app:get-version", () => app.getVersion());
+
 ipcMain.handle(
   "settings:save",
   (_event, settings: { pollIntervalSec: number; notifyEnabled: boolean; openOnStartup: boolean }) => {

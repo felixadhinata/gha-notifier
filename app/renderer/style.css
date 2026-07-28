@@ -521,5 +521,6 @@ table.runs td.num, table.runs th.num { font-variant-numeric: tabular-nums; }
 .field-row input { width: 80px; }
 .check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.version-line { text-align: center; margin: 2px 0 0; color: var(--text-faint); }
 
 [hidden] { display: none !important; }

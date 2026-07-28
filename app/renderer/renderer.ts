@@ -45,6 +45,7 @@ interface GhaApi {
 
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<{ ok: boolean }>;
+  getVersion(): Promise<string>;
 
   openExternal(url: string): Promise<void>;
   onRepoRunsUpdated(callback: (runsByRepo: Record<string, GithubRun[]>) => void): void;
@@ -598,6 +599,7 @@ const settingsNotify = $<HTMLInputElement>("settings-notify");
 const settingsStartup = $<HTMLInputElement>("settings-startup");
 const settingsConfirm = $<HTMLButtonElement>("settings-confirm");
 const settingsSignout = $<HTMLButtonElement>("settings-signout");
+const appVersionEl = $<HTMLParagraphElement>("app-version");
 
 settingsBtn.addEventListener("click", async () => {
   const settings = await gha.getSettings();
@@ -654,4 +656,6 @@ document.querySelectorAll<HTMLElement>(".modal-backdrop").forEach((backdrop) => 
   const { user } = await gha.getAuthState();
   renderAuth(user);
   if (user) void loadRepos();
+  const version = await gha.getVersion();
+  appVersionEl.textContent = `GHA Notifier v${version}`;
 })();
