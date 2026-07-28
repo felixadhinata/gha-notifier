@@ -67,6 +67,15 @@ mkdir -p "$STAGE/DEBIAN"
 cat > "$STAGE/DEBIAN/postinst" <<'EOF'
 #!/bin/sh
 set -e
+# Chromium's setuid sandbox helper must be owned by root and mode 4755, or
+# newer kernels that restrict unprivileged user namespaces (Ubuntu 23.10+/24.04
+# and similar by default) will refuse to start the renderer sandbox and the
+# app crashes on launch with no window ever appearing. `cp -r` during packaging
+# doesn't preserve/create this, so set it explicitly on every install.
+if [ -f /opt/gha-notifier/chrome-sandbox ]; then
+  chown root:root /opt/gha-notifier/chrome-sandbox
+  chmod 4755 /opt/gha-notifier/chrome-sandbox
+fi
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database /usr/share/applications 2>/dev/null || true
 fi
