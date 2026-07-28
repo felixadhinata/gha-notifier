@@ -76,6 +76,7 @@ fi
 EOF
 chmod 755 "$STAGE/DEBIAN/postinst"
 
-dpkg-deb --build --root-owner-group "$STAGE" "$OUT"
+echo "==> Compressing into $OUT (gzip, faster than dpkg-deb's xz default for ~300MB+ of already-compressed Chromium binaries — this still takes a minute or two, it's not stuck)"
+dpkg-deb --build --root-owner-group -Zgzip -z1 "$STAGE" "$OUT"
 rm -rf "$STAGE"
 echo "Built $OUT"
