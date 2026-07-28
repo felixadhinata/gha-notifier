@@ -10,7 +10,7 @@ from gi.repository import Gio, GLib, Gtk, Pango
 
 from config import add_repo, get_repos, remove_repo, save_config
 from dialogs import AddRepoDialog
-from formatters import STATUS_COLORS, format_duration, format_run_started_at, status_color_from_run
+from formatters import format_duration, format_run_started_at, status_color_from_run
 from models import RunRow
 from repo_service import refresh_repo_runs, repo_status_from_runs
 import store
@@ -37,7 +37,7 @@ def build_main_view():
     """Build the repos | runs split view. Returns the outer widget."""
     paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
     paned.set_wide_handle(True)
-    paned.set_position(260)
+    paned.set_position(280)
     paned.set_resize_start_child(False)
     paned.set_shrink_start_child(False)
     paned.set_resize_end_child(True)
@@ -54,7 +54,7 @@ def build_main_view():
 def render_repos_pane():
     """Rebuild the repos ListBox from store.config['repos'] + store.repo_runs statuses."""
     listbox = Gtk.ListBox()
-    listbox.add_css_class("navigation-sidebar")
+    listbox.add_css_class("gha-repo-list")
     listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
     listbox.connect("row-activated", _on_repo_row_activated)
 
@@ -62,13 +62,12 @@ def render_repos_pane():
         row = Gtk.ListBoxRow()
         row.repo_key = repo_key
         content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        content.set_margin_start(8)
+        content.set_margin_start(6)
         content.set_margin_end(4)
         content.set_margin_top(6)
         content.set_margin_bottom(6)
 
-        dot = Gtk.Label()
-        dot.set_markup(_dot_markup(repo_status_from_runs(store.repo_runs.get(repo_key))))
+        dot = _make_status_dot(repo_status_from_runs(store.repo_runs.get(repo_key)))
 
         name_lbl = Gtk.Label(label=repo_key)
         name_lbl.set_xalign(0)
@@ -90,6 +89,9 @@ def render_repos_pane():
         if _ui.selected_repo == repo_key:
             listbox.select_row(row)
 
+    if _ui.selected_repo is None:
+        listbox.unselect_all()
+
     _ui.repos_scroll.set_child(listbox)
     _ui.repos_listbox = listbox
 
@@ -110,22 +112,31 @@ def on_repo_runs_updated():
 # Private: building blocks
 # ---------------------------------------------------------------------------
 
-def _dot_markup(status):
-    color = STATUS_COLORS.get(status or "gray", STATUS_COLORS["gray"])
-    return f"<span foreground='{color}'>●</span>"
+def _make_status_dot(status):
+    """A small filled circle (Gtk.Box + CSS) for a repo's aggregate status."""
+    dot = Gtk.Box()
+    dot.add_css_class("status-dot")
+    dot.add_css_class(status or "gray")
+    dot.set_valign(Gtk.Align.CENTER)
+    return dot
 
 
 def _build_repos_pane():
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    box.add_css_class("gha-sidebar")
     box.set_margin_start(12)
-    box.set_margin_end(8)
-    box.set_margin_top(4)
+    box.set_margin_end(6)
+    box.set_margin_top(6)
     box.set_margin_bottom(8)
-    box.set_size_request(220, -1)
+    box.set_size_request(250, -1)
 
     header_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+    header_row.set_margin_start(6)
+    header_row.set_margin_end(6)
+    header_row.set_margin_top(6)
     label = Gtk.Label()
     label.set_markup("<b>Monitored repos</b>")
+    label.add_css_class("gha-section-label")
     label.set_halign(Gtk.Align.START)
     label.set_hexpand(True)
     _ui.repos_spinner = Gtk.Spinner()
@@ -140,11 +151,18 @@ def _build_repos_pane():
     _ui.repos_scroll.set_child(_ui.repos_listbox)
     _ui.repos_scroll.set_vexpand(True)
     frame = Gtk.Frame()
+    frame.add_css_class("gha-card")
     frame.set_child(_ui.repos_scroll)
     frame.set_vexpand(True)
+    frame.set_margin_start(6)
+    frame.set_margin_end(6)
     box.append(frame)
 
     _ui.add_repo_btn = Gtk.Button(label="+ Add repository")
+    _ui.add_repo_btn.add_css_class("gha-add-repo")
+    _ui.add_repo_btn.set_margin_start(6)
+    _ui.add_repo_btn.set_margin_end(6)
+    _ui.add_repo_btn.set_margin_bottom(2)
     _ui.add_repo_btn.connect("clicked", lambda *a: _on_add_repo_clicked())
     box.append(_ui.add_repo_btn)
     return box
@@ -179,22 +197,33 @@ def _build_runs_pane():
     scroll.set_child(_ui.runs_container)
     scroll.set_vexpand(True)
     frame = Gtk.Frame()
+    frame.add_css_class("gha-card")
     frame.set_child(scroll)
     frame.set_vexpand(True)
     box.append(frame)
     return box
 
 
-def _centered(widget):
-    widget.set_halign(Gtk.Align.CENTER)
-    widget.set_valign(Gtk.Align.CENTER)
-    widget.set_hexpand(True)
-    widget.set_vexpand(True)
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+def _centered(*widgets):
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+    box.set_halign(Gtk.Align.CENTER)
+    box.set_valign(Gtk.Align.CENTER)
     box.set_hexpand(True)
     box.set_vexpand(True)
-    box.append(widget)
+    box.add_css_class("gha-empty-state")
+    for widget in widgets:
+        box.append(widget)
     return box
+
+
+def _empty_state(icon_name, text):
+    icon = Gtk.Image.new_from_icon_name(icon_name)
+    icon.add_css_class("gha-empty-icon")
+    icon.set_pixel_size(32)
+    label = Gtk.Label(label=text)
+    label.set_justify(Gtk.Justification.CENTER)
+    label.set_wrap(True)
+    return _centered(icon, label)
 
 
 def _render_runs_pane():
@@ -202,8 +231,9 @@ def _render_runs_pane():
     _ui.runs_refresh_btn.set_sensitive(_ui.selected_repo is not None)
     if _ui.selected_repo is None:
         _ui.runs_header_label.set_text("")
-        placeholder = Gtk.Label(label="Select a repository to see your recent workflow runs.")
-        _ui.runs_container.append(_centered(placeholder))
+        _ui.runs_container.append(
+            _empty_state("view-list-symbolic", "Select a repository to see your recent workflow runs.")
+        )
         return
 
     repo_key = _ui.selected_repo

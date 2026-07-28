@@ -21,6 +21,7 @@ from pollers import PollerManager
 from repo_service import refresh_repo_runs
 import store
 from store import register as store_register
+from style import load_css
 from tray import TrayHandler, make_command_callback
 from ui_helpers import run_dialog_modal
 
@@ -50,6 +51,7 @@ class GhaNotifierApp(Gtk.Application):
 
     def _on_startup(self, app):
         Gtk.Application.do_startup(self)
+        load_css()
         # For Gio.Notification click-to-open when notify uses Gio path
         open_url_act = Gio.SimpleAction.new("open-url", GLib.VariantType("s"))
         open_url_act.connect("activate", lambda _a, p: webbrowser.open(p.get_string(0)))
@@ -134,26 +136,25 @@ class GhaNotifierApp(Gtk.Application):
         return True  # suppress default close (hide instead of destroy)
 
     def build_ui(self):
-        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        container.set_margin_start(16)
-        container.set_margin_end(16)
-        container.set_margin_top(16)
-        container.set_size_request(200, 100)
-        self.window.set_child(container)
+        self.window.add_css_class("gha-window")
+
+        header = Gtk.HeaderBar()
+        header.add_css_class("gha-headerbar")
+        header.set_title_widget(Gtk.Label(label=""))
+
+        self.avatar_label = Gtk.Label()
+        self.avatar_label.add_css_class("gha-avatar")
+        self.avatar_label.set_halign(Gtk.Align.CENTER)
+        self.avatar_label.set_valign(Gtk.Align.CENTER)
+        self.avatar_label.set_visible(False)
 
         self.auth_label = Gtk.Label(label="Sign in to get started")
         self.auth_label.set_xalign(0)
 
-        self.login_hint = Gtk.Label(label="Sign in with GitHub CLI or a Personal Access Token.")
-        self.login_hint.set_xalign(0)
-        self.login_hint.set_wrap(True)
-        self.login_hint.set_margin_bottom(4)
-
-        self.gh_btn = Gtk.Button(label="Sign in with GitHub CLI (gh)")
-        self.gh_btn.connect("clicked", self.on_login_with_gh)
-
-        self.token_btn = Gtk.Button(label="Sign in with token")
-        self.token_btn.connect("clicked", self.on_login_with_token)
+        identity_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        identity_box.append(self.avatar_label)
+        identity_box.append(self.auth_label)
+        header.pack_start(identity_box)
 
         self.menu_btn = Gtk.MenuButton()
         try:
@@ -171,11 +172,30 @@ class GhaNotifierApp(Gtk.Application):
         account_menu.append("Settings", "app.settings")
         account_menu.append("Sign out", "app.signout")
         self.menu_btn.set_popover(Gtk.PopoverMenu(menu_model=account_menu))
+        header.pack_end(self.menu_btn)
 
-        auth_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        auth_row.append(self.auth_label)
-        self.auth_label.set_hexpand(True)
-        auth_row.append(self.menu_btn)
+        self.window.set_titlebar(header)
+
+        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        container.set_margin_start(16)
+        container.set_margin_end(16)
+        container.set_margin_top(16)
+        container.set_margin_bottom(16)
+        container.set_size_request(200, 100)
+        self.window.set_child(container)
+
+        self.login_hint = Gtk.Label(label="Sign in with GitHub CLI or a Personal Access Token.")
+        self.login_hint.add_css_class("gha-hint")
+        self.login_hint.set_xalign(0)
+        self.login_hint.set_wrap(True)
+        self.login_hint.set_margin_bottom(4)
+
+        self.gh_btn = Gtk.Button(label="Sign in with GitHub CLI (gh)")
+        self.gh_btn.add_css_class("gha-primary")
+        self.gh_btn.connect("clicked", self.on_login_with_gh)
+
+        self.token_btn = Gtk.Button(label="Sign in with token")
+        self.token_btn.connect("clicked", self.on_login_with_token)
 
         auth_btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         auth_btn_box.append(self.gh_btn)
@@ -191,7 +211,6 @@ class GhaNotifierApp(Gtk.Application):
         self.status_box.append(self.status_label)
         self.status_label.set_hexpand(True)
 
-        container.append(auth_row)
         container.append(self.login_hint)
         self.main_view = build_main_view()
         self.main_view.set_vexpand(True)
@@ -204,22 +223,22 @@ class GhaNotifierApp(Gtk.Application):
     def refresh_auth_ui(self):
         user = self.config.get("user")
         if user:
-            login = (user.get("login") or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            self.auth_label.set_markup(f"Signed in as <b>{login}</b>")
-            self.auth_label.set_visible(True)
+            login = (user.get("login") or "").strip()
+            escaped = login.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            self.auth_label.set_markup(f"Signed in as <b>{escaped}</b>")
+            self.avatar_label.set_text((login[:1] or "?").upper())
+            self.avatar_label.set_visible(True)
             self.login_hint.set_visible(False)
             self.gh_btn.set_visible(False)
             self.token_btn.set_visible(False)
-            self.menu_btn.set_visible(True)
             self.main_view.set_visible(True)
             self.window.set_default_size(980, 700)
         else:
             self.auth_label.set_text("Sign in to get started")
-            self.auth_label.set_visible(True)
+            self.avatar_label.set_visible(False)
             self.login_hint.set_visible(True)
             self.gh_btn.set_visible(True)
             self.token_btn.set_visible(True)
-            self.menu_btn.set_visible(True)
             self.main_view.set_visible(False)
             self.window.set_default_size(380, 160)
 
