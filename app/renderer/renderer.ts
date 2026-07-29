@@ -419,7 +419,9 @@ function renderRunsPane(): void {
   const start = (currentPage - 1) * RUNS_PAGE_SIZE;
   const pageRuns = filtered.slice(start, start + RUNS_PAGE_SIZE);
 
-  runsBody.appendChild(buildRunsTable(pageRuns));
+  const table = buildRunsTable(pageRuns);
+  runsBody.appendChild(table);
+  attachColumnResize(table);
 
   paginationEl.hidden = totalPages <= 1;
   pagePrevBtn.disabled = currentPage <= 1;
@@ -439,23 +441,44 @@ function emptyPane(mark: string, title: string, description: string): HTMLElemen
   return box;
 }
 
+const RESIZABLE_COLUMNS = ["workflow", "branch", "status", "duration", "commit", "startedAt", "triggered"] as const;
+type ColumnKey = (typeof RESIZABLE_COLUMNS)[number];
+/** Session-only: widths the user has dragged, keyed by column. Re-applied on every rebuild
+ * (filters/pagination/polling all rebuild the table) so a resize sticks until sign-out. */
+const columnWidths: Partial<Record<ColumnKey, number>> = {};
+
 function buildRunsTable(runs: GithubRun[]): HTMLTableElement {
   const table = document.createElement("table");
   table.className = "runs";
   table.innerHTML = `
+    <colgroup>
+      <col data-col="workflow" />
+      <col data-col="branch" />
+      <col data-col="status" />
+      <col data-col="duration" />
+      <col data-col="commit" />
+      <col data-col="startedAt" />
+      <col data-col="triggered" />
+      <col data-col="open" />
+    </colgroup>
     <thead>
       <tr>
-        <th>Workflow</th>
-        <th>Branch</th>
-        <th>Status</th>
-        <th class="num">Duration</th>
-        <th>Commit</th>
-        <th class="num">Started At</th>
-        <th class="num">Triggered</th>
+        <th data-col="workflow">Workflow<span class="col-resize-handle"></span></th>
+        <th data-col="branch">Branch<span class="col-resize-handle"></span></th>
+        <th data-col="status">Status<span class="col-resize-handle"></span></th>
+        <th class="num" data-col="duration">Duration<span class="col-resize-handle"></span></th>
+        <th data-col="commit">Commit<span class="col-resize-handle"></span></th>
+        <th class="num" data-col="startedAt">Started At<span class="col-resize-handle"></span></th>
+        <th class="num" data-col="triggered">Triggered<span class="col-resize-handle"></span></th>
         <th></th>
       </tr>
     </thead>
   `;
+  for (const col of table.querySelectorAll<HTMLTableColElement>("col")) {
+    const key = col.dataset.col as ColumnKey | "open";
+    const width = key !== "open" ? columnWidths[key] : undefined;
+    if (width) col.style.width = `${width}px`;
+  }
   const tbody = document.createElement("tbody");
   table.appendChild(tbody);
   for (const run of runs) {
@@ -490,6 +513,59 @@ function buildRunsTable(runs: GithubRun[]): HTMLTableElement {
     tbody.appendChild(tr);
   }
   return table;
+}
+
+let columnWidthsCaptured = false;
+
+/**
+ * Wires up drag-to-resize handles on the header cells. The table starts in normal
+ * auto-layout (so columns size to content, same as before); the very first time this
+ * runs, it snapshots those natural widths into columnWidths and switches to a fixed
+ * layout so resizing has something stable to adjust. Every rebuild after that (every
+ * poll/filter/page change creates a fresh <table>) re-applies the saved widths via the
+ * colgroup built in buildRunsTable, so a resize persists for the rest of the session.
+ */
+function attachColumnResize(table: HTMLTableElement): void {
+  const ths = [...table.querySelectorAll<HTMLTableCellElement>("thead th[data-col]")];
+  const cols = [...table.querySelectorAll<HTMLTableColElement>("col")];
+
+  if (!columnWidthsCaptured) {
+    for (const th of ths) {
+      const key = th.dataset.col as ColumnKey;
+      columnWidths[key] = th.getBoundingClientRect().width;
+    }
+    columnWidthsCaptured = true;
+    for (const col of cols) {
+      const key = col.dataset.col as ColumnKey | "open";
+      if (key !== "open") col.style.width = `${columnWidths[key]}px`;
+    }
+  }
+  table.style.tableLayout = "fixed";
+
+  for (const th of ths) {
+    const handle = th.querySelector<HTMLElement>(".col-resize-handle");
+    const key = th.dataset.col as ColumnKey;
+    const col = cols.find((c) => c.dataset.col === key);
+    if (!handle || !col) continue;
+    handle.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = col.getBoundingClientRect().width;
+      handle.classList.add("resizing");
+      const onMove = (moveEvent: MouseEvent) => {
+        const next = Math.max(50, startWidth + (moveEvent.clientX - startX));
+        columnWidths[key] = next;
+        col.style.width = `${next}px`;
+      };
+      const onUp = () => {
+        handle.classList.remove("resizing");
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
+  }
 }
 
 function escapeHtml(s: string): string {
@@ -726,8 +802,15 @@ const settingsConfirm = $<HTMLButtonElement>("settings-confirm");
 const settingsTheme = $<HTMLSelectElement>("settings-theme");
 const settingsSound = $<HTMLSelectElement>("settings-sound");
 const settingsSignout = $<HTMLButtonElement>("settings-signout");
+const testNotificationRow = $<HTMLDivElement>("test-notification-row");
 const testNotificationBtn = $<HTMLButtonElement>("test-notification-btn");
 const appVersionEl = $<HTMLSpanElement>("app-version");
+
+function updateTestNotificationVisibility(): void {
+  testNotificationRow.hidden = !settingsNotify.checked;
+}
+
+settingsNotify.addEventListener("change", updateTestNotificationVisibility);
 
 function applyTheme(theme: Theme): void {
   if (theme === "system") {
@@ -760,6 +843,7 @@ settingsBtn.addEventListener("click", async () => {
   settingsStartup.checked = settings.openOnStartup;
   settingsTheme.value = settings.theme;
   settingsSound.value = settings.notificationSound;
+  updateTestNotificationVisibility();
   openModal(settingsModal);
 });
 

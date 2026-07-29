@@ -502,6 +502,8 @@ table.runs {
 }
 table.runs td, table.runs th {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 table.runs th {
   position: sticky;
@@ -522,6 +524,17 @@ table.runs td {
   vertical-align: middle;
   color: var(--text);
 }
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+  border-radius: 2px;
+}
+.col-resize-handle:hover, .col-resize-handle.resizing { background: var(--accent); opacity: 0.45; }
 table.runs tbody tr:hover td { background: var(--surface-sunken); }
 table.runs td.num, table.runs th.num { font-variant-numeric: tabular-nums; }
 .commit-cell {
@@ -662,7 +675,8 @@ table.runs td.num, table.runs th.num { font-variant-numeric: tabular-nums; }
 .field-row select { width: auto; }
 .check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .test-notification-row { display: flex; align-items: center; gap: 8px; }
-.test-notification-row select { width: auto; flex: 1; min-width: 0; }
+.test-notification-row select { width: 110px; max-width: 110px; flex: none; }
+.test-notification-row button { flex: 1; min-width: 0; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
 
 [hidden] { display: none !important; }
