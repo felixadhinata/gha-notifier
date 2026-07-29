@@ -96,7 +96,8 @@ const refreshBtn = $<HTMLButtonElement>("refresh-btn");
 const workflowFilterBtn = $<HTMLButtonElement>("workflow-filter-btn");
 const workflowFilterPopover = $<HTMLDivElement>("workflow-filter-popover");
 const workflowFilterPillbox = $<HTMLDivElement>("workflow-filter-pillbox");
-const workflowFilterSelect = $<HTMLSelectElement>("workflow-filter-select");
+const workflowFilterTrigger = $<HTMLButtonElement>("workflow-filter-trigger");
+const workflowFilterOptions = $<HTMLUListElement>("workflow-filter-options");
 
 const runsFiltersEl = $<HTMLDivElement>("runs-filters");
 const filterWorkflowEl = $<HTMLInputElement>("filter-workflow");
@@ -199,17 +200,26 @@ function renderRepoList(): void {
     });
 
     li.append(dot, name, removeBtn);
-    li.addEventListener("click", () => {
-      if (selectedRepo === repoKey) return;
-      selectedRepo = repoKey;
-      currentPage = 1;
-      clearFilters();
-      workflowFilterPopover.hidden = true;
-      renderRepoList();
-      renderRunsPane();
-    });
+    li.addEventListener("click", () => void selectRepo(repoKey));
     repoListEl.appendChild(li);
   }
+}
+
+/** Select a repo, resetting per-repo UI state and (re-)loading its workflow notification filter. */
+async function selectRepo(repoKey: string): Promise<void> {
+  if (selectedRepo === repoKey) return;
+  selectedRepo = repoKey;
+  currentPage = 1;
+  clearFilters();
+  workflowFilterPopover.hidden = true;
+  workflowFilterRepo = repoKey;
+  workflowFilterSelected = [];
+  renderRepoList();
+  renderRunsPane();
+  const result = await gha.getWorkflowFilter(repoKey);
+  if (workflowFilterRepo !== repoKey) return; // selection changed again before this resolved
+  workflowFilterSelected = result.workflows;
+  renderRunsPane();
 }
 
 async function onRemoveRepo(repoKey: string): Promise<void> {
@@ -220,6 +230,8 @@ async function onRemoveRepo(repoKey: string): Promise<void> {
     currentPage = 1;
     clearFilters();
     workflowFilterPopover.hidden = true;
+    workflowFilterRepo = null;
+    workflowFilterSelected = [];
   }
   delete runsByRepo[repoKey];
   renderRepoList();
@@ -311,11 +323,14 @@ function applyFilters(runs: GithubRun[]): GithubRun[] {
   const statusQ = filterStatusEl.value; // "" | "running" | "success" | "fail"
   const commitQ = filterCommitEl.value.trim().toLowerCase();
 
+  const notifyFilter = workflowFilterRepo === selectedRepo ? workflowFilterSelected : [];
+
   return runs.filter((run) => {
     if (workflowQ && !(run.name || "").toLowerCase().includes(workflowQ)) return false;
     if (branchQ && !(run.head_branch || "").toLowerCase().includes(branchQ)) return false;
     if (statusQ && statusClass(repoStatus([run])) !== statusQ) return false;
     if (commitQ && !(run.head_commit?.message || "").toLowerCase().includes(commitQ)) return false;
+    if (notifyFilter.length > 0 && !notifyFilter.includes(run.name || "Workflow")) return false;
     return true;
   });
 }
@@ -579,6 +594,23 @@ function distinctWorkflowNames(repoKey: string): string[] {
   return Array.from(names).sort();
 }
 
+function renderWorkflowFilterOptions(): void {
+  const available = distinctWorkflowNames(workflowFilterRepo || "").filter(
+    (name) => !workflowFilterSelected.includes(name),
+  );
+  workflowFilterOptions.innerHTML = "";
+  for (const name of available) {
+    const li = document.createElement("li");
+    li.textContent = name;
+    li.addEventListener("click", () => {
+      workflowFilterSelected.push(name);
+      workflowFilterOptions.hidden = true;
+      void saveWorkflowFilter();
+    });
+    workflowFilterOptions.appendChild(li);
+  }
+}
+
 function renderWorkflowFilterPillbox(): void {
   workflowFilterPillbox.querySelectorAll(".pill").forEach((el) => {
     el.remove();
@@ -598,45 +630,32 @@ function renderWorkflowFilterPillbox(): void {
       void saveWorkflowFilter();
     });
     pill.append(label, removeBtn);
-    workflowFilterPillbox.insertBefore(pill, workflowFilterSelect);
+    workflowFilterPillbox.insertBefore(pill, workflowFilterTrigger);
   }
-
-  const available = distinctWorkflowNames(workflowFilterRepo || "").filter(
-    (name) => !workflowFilterSelected.includes(name),
-  );
-  workflowFilterSelect.innerHTML = '<option value="">+ Add workflow…</option>';
-  for (const name of available) {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    workflowFilterSelect.appendChild(opt);
-  }
-  workflowFilterSelect.value = "";
+  renderWorkflowFilterOptions();
 }
 
 async function saveWorkflowFilter(): Promise<void> {
   if (!workflowFilterRepo) return;
   renderWorkflowFilterPillbox();
+  currentPage = 1;
+  renderRunsPane();
   await gha.setWorkflowFilter(workflowFilterRepo, workflowFilterSelected);
 }
 
-workflowFilterSelect.addEventListener("change", () => {
-  const name = workflowFilterSelect.value;
-  if (!name) return;
-  workflowFilterSelected.push(name);
-  void saveWorkflowFilter();
+workflowFilterTrigger.addEventListener("click", () => {
+  workflowFilterOptions.hidden = !workflowFilterOptions.hidden;
+  if (!workflowFilterOptions.hidden) renderWorkflowFilterOptions();
 });
 
-workflowFilterBtn.addEventListener("click", async (e) => {
+workflowFilterBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   if (!workflowFilterPopover.hidden) {
     workflowFilterPopover.hidden = true;
     return;
   }
   if (!selectedRepo) return;
-  workflowFilterRepo = selectedRepo;
-  const result = await gha.getWorkflowFilter(selectedRepo);
-  workflowFilterSelected = result.workflows;
+  workflowFilterOptions.hidden = true;
   renderWorkflowFilterPillbox();
   workflowFilterPopover.hidden = false;
 });
@@ -644,6 +663,7 @@ workflowFilterBtn.addEventListener("click", async (e) => {
 workflowFilterPopover.addEventListener("click", (e) => e.stopPropagation());
 document.addEventListener("click", () => {
   workflowFilterPopover.hidden = true;
+  workflowFilterOptions.hidden = true;
 });
 
 // ---------------------------------------------------------------------------

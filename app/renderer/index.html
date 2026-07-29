@@ -67,12 +67,11 @@
 
         <!-- Workflow notification-filter popover, anchored below the bell button -->
         <div id="workflow-filter-popover" class="workflow-filter-popover" hidden>
-          <label for="workflow-filter-select">Notify for workflows</label>
+          <label>Notify for workflows</label>
           <div id="workflow-filter-pillbox" class="pillbox">
-            <select id="workflow-filter-select">
-              <option value="">+ Add workflow…</option>
-            </select>
+            <button type="button" id="workflow-filter-trigger" class="pillbox-trigger">+ Add workflow…</button>
           </div>
+          <ul id="workflow-filter-options" class="suggestion-list" hidden></ul>
           <p class="hint small">Leave empty to get notified for every workflow.</p>
         </div>
         <div id="runs-filters" class="runs-filters" hidden>
