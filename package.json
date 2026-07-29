@@ -1,6 +1,6 @@
 {
   "name": "gha-notifier",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "GitHub Actions notifier: pick repos to monitor, get notified when your own runs finish.",
   "homepage": "https://github.com/felixadhinata/gha-notifier",
   "main": "dist/main/main.js",

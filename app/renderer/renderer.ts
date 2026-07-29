@@ -90,6 +90,12 @@ const repoListEl = $<HTMLUListElement>("repo-list");
 const reposSpinner = $<HTMLDivElement>("repos-spinner");
 const addRepoBtn = $<HTMLButtonElement>("add-repo-btn");
 const runsTitle = $<HTMLHeadingElement>("runs-title");
+runsTitle.addEventListener("click", (e) => {
+  const link = (e.target as HTMLElement).closest(".repo-link");
+  if (!link || !selectedRepo) return;
+  e.preventDefault();
+  void gha.openExternal(`https://github.com/${selectedRepo}`);
+});
 const runsBody = $<HTMLDivElement>("runs-body");
 const refreshBtn = $<HTMLButtonElement>("refresh-btn");
 
@@ -370,7 +376,7 @@ function renderRunsPane(): void {
     return;
   }
 
-  runsTitle.innerHTML = `${escapeHtml(selectedRepo)} <span class="sub">— your runs, all branches</span>`;
+  runsTitle.innerHTML = `<a href="#" class="repo-link">${escapeHtml(selectedRepo)}</a> <span class="sub">— your runs, all branches</span>`;
   const runs = runsByRepo[selectedRepo];
 
   if (runs === undefined) {

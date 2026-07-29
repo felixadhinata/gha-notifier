@@ -62,13 +62,19 @@ if [ ! -f "$DEB_PATH" ]; then
   exit 1
 fi
 
+NOTES="GHA Notifier ${VERSION}: Electron + TypeScript rewrite of the repo-only workflow-run notifier — auto-watch runs you triggered, tray notifications with a watch list, runs table with pagination/filters, System/Light/Dark theme, Biome-linted CI. See the .deb asset below to install.
+
+New in 2.1.0:
+- Per-repo workflow notification filter: pick which workflows to get desktop notifications for (pillbox + themed dropdown next to Refresh); leave empty to notify for all
+- The runs table now filters by the same selected workflows, live
+- Repo title in the runs pane links out to the repo on GitHub
+- Open-on-startup now defaults on for new installs"
+
 if gh release view "$TAG" >/dev/null 2>&1; then
   echo "Release $TAG already exists, uploading .deb to it."
   gh release upload "$TAG" "$DEB_PATH" --clobber
 else
-  gh release create "$TAG" "$DEB_PATH" \
-    --title "$TAG" \
-    --notes "GHA Notifier ${VERSION}: Electron + TypeScript rewrite of the repo-only workflow-run notifier — auto-watch runs you triggered, tray notifications with a watch list, runs table with pagination/filters, System/Light/Dark theme, Biome-linted CI. See the .deb asset below to install."
+  gh release create "$TAG" "$DEB_PATH" --title "$TAG" --notes "$NOTES"
 fi
 
 echo "Done: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/tag/${TAG}"
