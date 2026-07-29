@@ -55,7 +55,7 @@ export function repoStatusFromRuns(runs: GithubRun[] | undefined): RepoStatus {
   return "gray";
 }
 
-function formatDuration(startedAt: string | null, updatedAt: string | null): string {
+export function formatDuration(startedAt: string | null, updatedAt: string | null): string {
   if (!startedAt) return "n/a";
   const start = Date.parse(startedAt);
   if (Number.isNaN(start)) return "n/a";

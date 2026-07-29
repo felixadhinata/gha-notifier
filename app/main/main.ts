@@ -17,7 +17,7 @@ import {
   type Theme,
 } from "./config";
 import { GitHubClient, type GithubRun } from "./github";
-import { pollAllRepos, type RepoStatus, repoStatusFromRuns } from "./repoService";
+import { formatDuration, pollAllRepos, type RepoStatus, repoStatusFromRuns } from "./repoService";
 
 // Custom flag distinguishing "hide to tray" from an actual quit, so window "close" can
 // be intercepted while still allowing the tray's Quit item to exit for real.
@@ -174,8 +174,9 @@ function buildTrayMenuTemplate(): Electron.MenuItemConstructorOptions[] {
       const emoji = { yellow: "🟡", green: "🟢", red: "🔴", gray: "⚪" }[status];
       const branch = run.head_branch || "—";
       const commit = (run.head_commit?.message || "—").trim().split("\n")[0];
+      const duration = formatDuration(run.run_started_at, isRunInProgress(run) ? null : run.updated_at);
       return {
-        label: `${emoji} ${run.name || "Workflow"} · ${branch}`,
+        label: `${emoji} ${run.name || "Workflow"} · ${branch} · ${duration}`,
         sublabel: commit,
         enabled: Boolean(run.html_url),
         click: () => run.html_url && shell.openExternal(run.html_url),
