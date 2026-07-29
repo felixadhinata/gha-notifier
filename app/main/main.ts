@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, Notification, nativeImage, shell, Tray } from "electron";
 
 import { fetchGhCliToken, validateToken } from "./auth";
 import {
@@ -9,6 +9,7 @@ import {
   getRepos,
   getWorkflowFilter,
   loadConfig,
+  type NotificationSound,
   removeRepo,
   saveConfig,
   setOpenOnStartup,
@@ -242,11 +243,19 @@ function setupTray(): void {
 // Polling
 // ---------------------------------------------------------------------------
 
+// Notifications are shown from the main process, but actually playing a sound needs the
+// renderer's Audio element (no audio API exists on the main-process side), so this just
+// forwards the choice to whichever window is around to play it.
+function playNotificationSound(sound: NotificationSound): void {
+  if (sound === "none") return;
+  mainWindow?.webContents.send("play-notification-sound", sound);
+}
+
 async function refreshRuns(): Promise<void> {
   if (isPolling) return;
   isPolling = true;
   try {
-    const result = await pollAllRepos(config, client);
+    const result = await pollAllRepos(config, client, () => playNotificationSound(config.notificationSound));
     runsByRepo = result.runsByRepo;
     updateTrayWatches();
     rebuildTrayMenu();
@@ -360,17 +369,38 @@ ipcMain.handle("workflow-filter:set", (_event, repoKey: string, workflows: strin
 ipcMain.handle("settings:get", () => ({
   pollIntervalSec: config.pollIntervalSec,
   notifyEnabled: config.notifyEnabled,
+  notificationSound: config.notificationSound,
   openOnStartup: config.openOnStartup,
   theme: config.theme,
 }));
 
 ipcMain.handle("app:get-version", () => app.getVersion());
 
+ipcMain.handle("notifications:test", (_event, sound: NotificationSound) => {
+  const notification = new Notification({
+    title: "GHA Notifier",
+    body: "🔔 Test notification — if you can see (and hear) this, notifications are working.",
+  });
+  notification.show();
+  playNotificationSound(sound);
+  return { ok: true };
+});
+
 ipcMain.handle(
   "settings:save",
-  (_event, settings: { pollIntervalSec: number; notifyEnabled: boolean; openOnStartup: boolean; theme: Theme }) => {
+  (
+    _event,
+    settings: {
+      pollIntervalSec: number;
+      notifyEnabled: boolean;
+      notificationSound: NotificationSound;
+      openOnStartup: boolean;
+      theme: Theme;
+    },
+  ) => {
     config.pollIntervalSec = settings.pollIntervalSec;
     config.notifyEnabled = settings.notifyEnabled;
+    config.notificationSound = settings.notificationSound;
     config.openOnStartup = settings.openOnStartup;
     config.theme = settings.theme;
     saveConfig(config);

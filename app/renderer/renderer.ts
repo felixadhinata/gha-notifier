@@ -20,10 +20,12 @@ interface GithubUser {
 }
 
 type Theme = "system" | "light" | "dark";
+type NotificationSound = "none" | "default" | "chime" | "ping";
 
 interface Settings {
   pollIntervalSec: number;
   notifyEnabled: boolean;
+  notificationSound: NotificationSound;
   openOnStartup: boolean;
   theme: Theme;
 }
@@ -51,12 +53,14 @@ interface GhaApi {
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<{ ok: boolean }>;
   getVersion(): Promise<string>;
+  sendTestNotification(sound: NotificationSound): Promise<{ ok: boolean }>;
 
   getWorkflowFilter(repoKey: string): Promise<{ workflows: string[] }>;
   setWorkflowFilter(repoKey: string, workflows: string[]): Promise<{ ok: boolean }>;
 
   openExternal(url: string): Promise<void>;
   onRepoRunsUpdated(callback: (runsByRepo: Record<string, GithubRun[]>) => void): void;
+  onPlayNotificationSound(callback: (sound: NotificationSound) => void): void;
 }
 
 declare global {
@@ -720,7 +724,9 @@ const settingsNotify = $<HTMLInputElement>("settings-notify");
 const settingsStartup = $<HTMLInputElement>("settings-startup");
 const settingsConfirm = $<HTMLButtonElement>("settings-confirm");
 const settingsTheme = $<HTMLSelectElement>("settings-theme");
+const settingsSound = $<HTMLSelectElement>("settings-sound");
 const settingsSignout = $<HTMLButtonElement>("settings-signout");
+const testNotificationBtn = $<HTMLButtonElement>("test-notification-btn");
 const appVersionEl = $<HTMLSpanElement>("app-version");
 
 function applyTheme(theme: Theme): void {
@@ -731,12 +737,26 @@ function applyTheme(theme: Theme): void {
   }
 }
 
+const SOUND_FILES: Record<Exclude<NotificationSound, "none">, string> = {
+  default: "sounds/default.wav",
+  chime: "sounds/chime.wav",
+  ping: "sounds/ping.wav",
+};
+
+function playNotificationSound(sound: NotificationSound): void {
+  if (sound === "none") return;
+  new Audio(SOUND_FILES[sound]).play().catch(() => {});
+}
+
+gha.onPlayNotificationSound(playNotificationSound);
+
 settingsBtn.addEventListener("click", async () => {
   const settings = await gha.getSettings();
   settingsInterval.value = String(settings.pollIntervalSec);
   settingsNotify.checked = settings.notifyEnabled;
   settingsStartup.checked = settings.openOnStartup;
   settingsTheme.value = settings.theme;
+  settingsSound.value = settings.notificationSound;
   openModal(settingsModal);
 });
 
@@ -745,11 +765,23 @@ settingsConfirm.addEventListener("click", async () => {
   await gha.saveSettings({
     pollIntervalSec: Math.max(10, Number(settingsInterval.value) || 20),
     notifyEnabled: settingsNotify.checked,
+    notificationSound: settingsSound.value as NotificationSound,
     openOnStartup: settingsStartup.checked,
     theme,
   });
   applyTheme(theme);
   closeModal(settingsModal);
+});
+
+testNotificationBtn.addEventListener("click", async () => {
+  testNotificationBtn.disabled = true;
+  const originalText = testNotificationBtn.textContent;
+  await gha.sendTestNotification(settingsSound.value as NotificationSound);
+  testNotificationBtn.textContent = "Sent!";
+  setTimeout(() => {
+    testNotificationBtn.textContent = originalText;
+    testNotificationBtn.disabled = false;
+  }, 1500);
 });
 
 settingsSignout.addEventListener("click", async () => {

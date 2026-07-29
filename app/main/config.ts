@@ -11,10 +11,12 @@ export interface GithubUser {
 }
 
 export type Theme = "system" | "light" | "dark";
+export type NotificationSound = "none" | "default" | "chime" | "ping";
 
 export interface AppConfig {
   pollIntervalSec: number;
   notifyEnabled: boolean;
+  notificationSound: NotificationSound;
   openOnStartup: boolean;
   theme: Theme;
   repos: string[];
@@ -27,6 +29,7 @@ export interface AppConfig {
 export const DEFAULT_CONFIG: AppConfig = {
   pollIntervalSec: 20,
   notifyEnabled: true,
+  notificationSound: "default",
   openOnStartup: true,
   theme: "system",
   repos: [],
@@ -51,6 +54,7 @@ export function loadConfig(): AppConfig {
     return {
       pollIntervalSec: raw.pollIntervalSec ?? DEFAULT_CONFIG.pollIntervalSec,
       notifyEnabled: raw.notifyEnabled ?? DEFAULT_CONFIG.notifyEnabled,
+      notificationSound: raw.notificationSound ?? DEFAULT_CONFIG.notificationSound,
       openOnStartup: raw.openOnStartup ?? DEFAULT_CONFIG.openOnStartup,
       theme: raw.theme ?? DEFAULT_CONFIG.theme,
       repos: normalizeRepos(raw.repos),

@@ -661,6 +661,8 @@ table.runs td.num, table.runs th.num { font-variant-numeric: tabular-nums; }
 .field-row input { width: 80px; }
 .field-row select { width: auto; }
 .check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.test-notification-row { display: flex; align-items: center; gap: 8px; }
+.test-notification-row select { width: auto; flex: 1; min-width: 0; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
 
 [hidden] { display: none !important; }

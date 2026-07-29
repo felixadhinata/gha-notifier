@@ -5,7 +5,7 @@
   "homepage": "https://github.com/felixadhinata/gha-notifier",
   "main": "dist/main/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && mkdir -p dist/renderer && cp app/renderer/index.html app/renderer/style.css dist/renderer/",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && mkdir -p dist/renderer/sounds && cp app/renderer/index.html app/renderer/style.css dist/renderer/ && cp app/renderer/sounds/*.wav dist/renderer/sounds/",
     "start": "npm run build && electron .",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run pack && bash scripts/package-deb.sh",

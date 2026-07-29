@@ -1,10 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { GithubUser, Theme } from "./main/config";
+import type { GithubUser, NotificationSound, Theme } from "./main/config";
 import type { GithubRun } from "./main/github";
 
 export interface Settings {
   pollIntervalSec: number;
   notifyEnabled: boolean;
+  notificationSound: NotificationSound;
   openOnStartup: boolean;
   theme: Theme;
 }
@@ -26,12 +27,14 @@ export interface GhaApi {
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<{ ok: boolean }>;
   getVersion(): Promise<string>;
+  sendTestNotification(sound: NotificationSound): Promise<{ ok: boolean }>;
 
   getWorkflowFilter(repoKey: string): Promise<{ workflows: string[] }>;
   setWorkflowFilter(repoKey: string, workflows: string[]): Promise<{ ok: boolean }>;
 
   openExternal(url: string): Promise<void>;
   onRepoRunsUpdated(callback: (runsByRepo: Record<string, GithubRun[]>) => void): void;
+  onPlayNotificationSound(callback: (sound: NotificationSound) => void): void;
 }
 
 const api: GhaApi = {
@@ -49,6 +52,7 @@ const api: GhaApi = {
   getSettings: () => ipcRenderer.invoke("settings:get"),
   saveSettings: (settings) => ipcRenderer.invoke("settings:save", settings),
   getVersion: () => ipcRenderer.invoke("app:get-version"),
+  sendTestNotification: (sound) => ipcRenderer.invoke("notifications:test", sound),
 
   getWorkflowFilter: (repoKey) => ipcRenderer.invoke("workflow-filter:get", repoKey),
   setWorkflowFilter: (repoKey, workflows) => ipcRenderer.invoke("workflow-filter:set", repoKey, workflows),
@@ -56,6 +60,9 @@ const api: GhaApi = {
   openExternal: (url) => ipcRenderer.invoke("shell:open-external", url),
   onRepoRunsUpdated: (callback) => {
     ipcRenderer.on("repo-runs-updated", (_event, runsByRepo) => callback(runsByRepo));
+  },
+  onPlayNotificationSound: (callback) => {
+    ipcRenderer.on("play-notification-sound", (_event, sound) => callback(sound));
   },
 };
 

@@ -91,7 +91,11 @@ interface PollResult {
 }
 
 /** Fetch recent runs for every monitored repo; fire notifications for runs that just completed. */
-export async function pollAllRepos(config: AppConfig, client: GitHubClient | null): Promise<PollResult> {
+export async function pollAllRepos(
+  config: AppConfig,
+  client: GitHubClient | null,
+  onNotify?: () => void,
+): Promise<PollResult> {
   const runsByRepo: Record<string, GithubRun[]> = {};
   const login = config.user?.login;
   if (!login || !client?.token) {
@@ -108,7 +112,10 @@ export async function pollAllRepos(config: AppConfig, client: GitHubClient | nul
         trackedActiveRunIds.add(run.id);
       } else if (trackedActiveRunIds.has(run.id)) {
         trackedActiveRunIds.delete(run.id);
-        if (config.notifyEnabled && matchesWorkflowFilter(config, repoKey, run)) notifyCompleted(repoKey, run);
+        if (config.notifyEnabled && matchesWorkflowFilter(config, repoKey, run)) {
+          notifyCompleted(repoKey, run);
+          onNotify?.();
+        }
       }
     }
   }
