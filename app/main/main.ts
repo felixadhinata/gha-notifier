@@ -141,8 +141,15 @@ function pickOverallStatus(): RepoStatus {
 // Tracks whether the tray's popup menu is currently open, so a poll-triggered rebuild
 // doesn't yank the menu out from under the user mid-click by replacing it while it's
 // showing. Instead, the rebuild is deferred until the menu actually closes.
+//
+// Opening a submenu (e.g. hovering a repo to see its runs) can itself fire a spurious
+// menu-will-close on some Linux tray backends, even though the top-level menu is still
+// up — debounce the close so a rebuild doesn't sneak in and snap the submenu shut while
+// the user is still looking at it.
 let trayMenuOpen = false;
 let trayMenuRebuildPending = false;
+let trayMenuCloseTimer: NodeJS.Timeout | null = null;
+const TRAY_MENU_CLOSE_DEBOUNCE_MS = 400;
 
 function buildTrayMenuTemplate(): Electron.MenuItemConstructorOptions[] {
   const byRepo = new Map<string, TrayWatchEntry[]>();
@@ -220,13 +227,21 @@ function rebuildTrayMenu(): void {
   const menu = Menu.buildFromTemplate(buildTrayMenuTemplate());
   menu.on("menu-will-show", () => {
     trayMenuOpen = true;
+    if (trayMenuCloseTimer) {
+      clearTimeout(trayMenuCloseTimer);
+      trayMenuCloseTimer = null;
+    }
   });
   menu.on("menu-will-close", () => {
-    trayMenuOpen = false;
-    if (trayMenuRebuildPending) {
-      trayMenuRebuildPending = false;
-      rebuildTrayMenu();
-    }
+    if (trayMenuCloseTimer) clearTimeout(trayMenuCloseTimer);
+    trayMenuCloseTimer = setTimeout(() => {
+      trayMenuCloseTimer = null;
+      trayMenuOpen = false;
+      if (trayMenuRebuildPending) {
+        trayMenuRebuildPending = false;
+        rebuildTrayMenu();
+      }
+    }, TRAY_MENU_CLOSE_DEBOUNCE_MS);
   });
   tray.setContextMenu(menu);
 }
