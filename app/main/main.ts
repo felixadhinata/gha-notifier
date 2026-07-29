@@ -138,6 +138,11 @@ function pickOverallStatus(): RepoStatus {
   return "green";
 }
 
+// Re-setting the tray image to the same icon every poll makes some Linux tray hosts
+// briefly flicker/blink it, even though the pixels are identical — only touch it when
+// the status actually changed.
+let lastTrayIconStatus: RepoStatus | null = null;
+
 // Tracks whether the tray's popup menu is currently open, so a poll-triggered rebuild
 // doesn't yank the menu out from under the user mid-click by replacing it while it's
 // showing. Instead, the rebuild is deferred until the menu actually closes.
@@ -218,7 +223,11 @@ function buildTrayMenuTemplate(): Electron.MenuItemConstructorOptions[] {
 
 function rebuildTrayMenu(): void {
   if (!tray) return;
-  tray.setImage(nativeImage.createFromPath(trayIconPath(pickOverallStatus())));
+  const status = pickOverallStatus();
+  if (status !== lastTrayIconStatus) {
+    lastTrayIconStatus = status;
+    tray.setImage(nativeImage.createFromPath(trayIconPath(status)));
+  }
 
   if (trayMenuOpen) {
     trayMenuRebuildPending = true;
