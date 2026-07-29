@@ -61,7 +61,19 @@
         <div class="runs-head">
           <h2 id="runs-title"></h2>
           <div class="spacer"></div>
+          <button id="workflow-filter-btn" class="btn icon" title="Notify for workflows" disabled>&#128276;</button>
           <button id="refresh-btn" class="btn icon" title="Refresh" disabled>&#8635;</button>
+        </div>
+
+        <!-- Workflow notification-filter popover, anchored below the bell button -->
+        <div id="workflow-filter-popover" class="workflow-filter-popover" hidden>
+          <label for="workflow-filter-select">Notify for workflows</label>
+          <div id="workflow-filter-pillbox" class="pillbox">
+            <select id="workflow-filter-select">
+              <option value="">+ Add workflow…</option>
+            </select>
+          </div>
+          <p class="hint small">Leave empty to get notified for every workflow.</p>
         </div>
         <div id="runs-filters" class="runs-filters" hidden>
           <input id="filter-workflow" type="text" placeholder="Workflow" autocomplete="off" />

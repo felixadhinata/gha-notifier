@@ -27,6 +27,9 @@ export interface GhaApi {
   saveSettings(settings: Settings): Promise<{ ok: boolean }>;
   getVersion(): Promise<string>;
 
+  getWorkflowFilter(repoKey: string): Promise<{ workflows: string[] }>;
+  setWorkflowFilter(repoKey: string, workflows: string[]): Promise<{ ok: boolean }>;
+
   openExternal(url: string): Promise<void>;
   onRepoRunsUpdated(callback: (runsByRepo: Record<string, GithubRun[]>) => void): void;
 }
@@ -46,6 +49,9 @@ const api: GhaApi = {
   getSettings: () => ipcRenderer.invoke("settings:get"),
   saveSettings: (settings) => ipcRenderer.invoke("settings:save", settings),
   getVersion: () => ipcRenderer.invoke("app:get-version"),
+
+  getWorkflowFilter: (repoKey) => ipcRenderer.invoke("workflow-filter:get", repoKey),
+  setWorkflowFilter: (repoKey, workflows) => ipcRenderer.invoke("workflow-filter:set", repoKey, workflows),
 
   openExternal: (url) => ipcRenderer.invoke("shell:open-external", url),
   onRepoRunsUpdated: (callback) => {

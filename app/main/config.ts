@@ -18,6 +18,8 @@ export interface AppConfig {
   openOnStartup: boolean;
   theme: Theme;
   repos: string[];
+  /** repoKey -> workflow names to notify for. Empty/missing means "notify for all workflows". */
+  workflowFilters: Record<string, string[]>;
   token: string | null;
   user: GithubUser | null;
 }
@@ -25,9 +27,10 @@ export interface AppConfig {
 export const DEFAULT_CONFIG: AppConfig = {
   pollIntervalSec: 20,
   notifyEnabled: true,
-  openOnStartup: false,
+  openOnStartup: true,
   theme: "system",
   repos: [],
+  workflowFilters: {},
   token: null,
   user: null,
 };
@@ -51,6 +54,7 @@ export function loadConfig(): AppConfig {
       openOnStartup: raw.openOnStartup ?? DEFAULT_CONFIG.openOnStartup,
       theme: raw.theme ?? DEFAULT_CONFIG.theme,
       repos: normalizeRepos(raw.repos),
+      workflowFilters: normalizeWorkflowFilters(raw.workflowFilters),
       token: raw.token ?? DEFAULT_CONFIG.token,
       user: raw.user ?? DEFAULT_CONFIG.user,
     };
@@ -91,7 +95,34 @@ export function removeRepo(config: AppConfig, repoKey: string): boolean {
   const repos = getRepos(config);
   if (!repos.includes(repoKey)) return false;
   config.repos = repos.filter((r) => r !== repoKey);
+  delete config.workflowFilters[repoKey];
   return true;
+}
+
+/** Workflow names to notify for on a repo. Empty means "all workflows". */
+export function getWorkflowFilter(config: AppConfig, repoKey: string): string[] {
+  return config.workflowFilters[repoKey] || [];
+}
+
+/** Set (or clear, if empty) the workflow notification filter for a repo. */
+export function setWorkflowFilter(config: AppConfig, repoKey: string, workflows: string[]): void {
+  const cleaned = Array.from(new Set(workflows.map((w) => w.trim()).filter(Boolean))).sort();
+  if (cleaned.length === 0) {
+    delete config.workflowFilters[repoKey];
+  } else {
+    config.workflowFilters[repoKey] = cleaned;
+  }
+}
+
+function normalizeWorkflowFilters(raw: unknown): Record<string, string[]> {
+  if (!raw || typeof raw !== "object") return {};
+  const result: Record<string, string[]> = {};
+  for (const [repoKey, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(value)) continue;
+    const names = value.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+    if (names.length > 0) result[repoKey] = names;
+  }
+  return result;
 }
 
 function normalizeRepos(raw: unknown): string[] {

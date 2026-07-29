@@ -5,6 +5,7 @@
 
 import { Notification, shell } from "electron";
 import type { AppConfig } from "./config";
+import { getWorkflowFilter } from "./config";
 import type { GitHubClient, GithubRun } from "./github";
 
 // GitHub's max per_page. Fetching the full page (instead of a small slice) means the
@@ -18,6 +19,13 @@ const trackedActiveRunIds = new Set<number>();
 function isInProgress(run: GithubRun): boolean {
   const status = (run.status || "").toLowerCase();
   return status === "in_progress" || status === "queued";
+}
+
+/** A repo's workflow filter (if any) restricts notifications to the selected workflow names. */
+function matchesWorkflowFilter(config: AppConfig, repoKey: string, run: GithubRun): boolean {
+  const filter = getWorkflowFilter(config, repoKey);
+  if (filter.length === 0) return true;
+  return filter.includes(run.name || "Workflow");
 }
 
 async function fetchMyRuns(
@@ -100,7 +108,7 @@ export async function pollAllRepos(config: AppConfig, client: GitHubClient | nul
         trackedActiveRunIds.add(run.id);
       } else if (trackedActiveRunIds.has(run.id)) {
         trackedActiveRunIds.delete(run.id);
-        if (config.notifyEnabled) notifyCompleted(repoKey, run);
+        if (config.notifyEnabled && matchesWorkflowFilter(config, repoKey, run)) notifyCompleted(repoKey, run);
       }
     }
   }

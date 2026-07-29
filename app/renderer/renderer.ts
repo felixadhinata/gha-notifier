@@ -52,6 +52,9 @@ interface GhaApi {
   saveSettings(settings: Settings): Promise<{ ok: boolean }>;
   getVersion(): Promise<string>;
 
+  getWorkflowFilter(repoKey: string): Promise<{ workflows: string[] }>;
+  setWorkflowFilter(repoKey: string, workflows: string[]): Promise<{ ok: boolean }>;
+
   openExternal(url: string): Promise<void>;
   onRepoRunsUpdated(callback: (runsByRepo: Record<string, GithubRun[]>) => void): void;
 }
@@ -89,6 +92,11 @@ const addRepoBtn = $<HTMLButtonElement>("add-repo-btn");
 const runsTitle = $<HTMLHeadingElement>("runs-title");
 const runsBody = $<HTMLDivElement>("runs-body");
 const refreshBtn = $<HTMLButtonElement>("refresh-btn");
+
+const workflowFilterBtn = $<HTMLButtonElement>("workflow-filter-btn");
+const workflowFilterPopover = $<HTMLDivElement>("workflow-filter-popover");
+const workflowFilterPillbox = $<HTMLDivElement>("workflow-filter-pillbox");
+const workflowFilterSelect = $<HTMLSelectElement>("workflow-filter-select");
 
 const runsFiltersEl = $<HTMLDivElement>("runs-filters");
 const filterWorkflowEl = $<HTMLInputElement>("filter-workflow");
@@ -196,6 +204,7 @@ function renderRepoList(): void {
       selectedRepo = repoKey;
       currentPage = 1;
       clearFilters();
+      workflowFilterPopover.hidden = true;
       renderRepoList();
       renderRunsPane();
     });
@@ -210,6 +219,7 @@ async function onRemoveRepo(repoKey: string): Promise<void> {
     selectedRepo = null;
     currentPage = 1;
     clearFilters();
+    workflowFilterPopover.hidden = true;
   }
   delete runsByRepo[repoKey];
   renderRepoList();
@@ -332,6 +342,7 @@ pageNextBtn.addEventListener("click", () => {
 
 function renderRunsPane(): void {
   refreshBtn.disabled = selectedRepo === null;
+  workflowFilterBtn.disabled = selectedRepo === null;
   runsBody.innerHTML = "";
 
   if (selectedRepo === null) {
@@ -555,6 +566,85 @@ async function confirmAddRepo(): Promise<void> {
   renderRepoList();
   renderRunsPane();
 }
+
+// ---------------------------------------------------------------------------
+// Workflow notification-filter popover
+// ---------------------------------------------------------------------------
+
+let workflowFilterRepo: string | null = null;
+let workflowFilterSelected: string[] = [];
+
+function distinctWorkflowNames(repoKey: string): string[] {
+  const names = new Set((runsByRepo[repoKey] || []).map((r) => r.name || "Workflow"));
+  return Array.from(names).sort();
+}
+
+function renderWorkflowFilterPillbox(): void {
+  workflowFilterPillbox.querySelectorAll(".pill").forEach((el) => {
+    el.remove();
+  });
+  for (const name of workflowFilterSelected) {
+    const pill = document.createElement("span");
+    pill.className = "pill";
+    const label = document.createElement("span");
+    label.textContent = name;
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "pill-remove";
+    removeBtn.title = `Stop notifying for ${name}`;
+    removeBtn.textContent = "×";
+    removeBtn.addEventListener("click", () => {
+      workflowFilterSelected = workflowFilterSelected.filter((n) => n !== name);
+      void saveWorkflowFilter();
+    });
+    pill.append(label, removeBtn);
+    workflowFilterPillbox.insertBefore(pill, workflowFilterSelect);
+  }
+
+  const available = distinctWorkflowNames(workflowFilterRepo || "").filter(
+    (name) => !workflowFilterSelected.includes(name),
+  );
+  workflowFilterSelect.innerHTML = '<option value="">+ Add workflow…</option>';
+  for (const name of available) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    workflowFilterSelect.appendChild(opt);
+  }
+  workflowFilterSelect.value = "";
+}
+
+async function saveWorkflowFilter(): Promise<void> {
+  if (!workflowFilterRepo) return;
+  renderWorkflowFilterPillbox();
+  await gha.setWorkflowFilter(workflowFilterRepo, workflowFilterSelected);
+}
+
+workflowFilterSelect.addEventListener("change", () => {
+  const name = workflowFilterSelect.value;
+  if (!name) return;
+  workflowFilterSelected.push(name);
+  void saveWorkflowFilter();
+});
+
+workflowFilterBtn.addEventListener("click", async (e) => {
+  e.stopPropagation();
+  if (!workflowFilterPopover.hidden) {
+    workflowFilterPopover.hidden = true;
+    return;
+  }
+  if (!selectedRepo) return;
+  workflowFilterRepo = selectedRepo;
+  const result = await gha.getWorkflowFilter(selectedRepo);
+  workflowFilterSelected = result.workflows;
+  renderWorkflowFilterPillbox();
+  workflowFilterPopover.hidden = false;
+});
+
+workflowFilterPopover.addEventListener("click", (e) => e.stopPropagation());
+document.addEventListener("click", () => {
+  workflowFilterPopover.hidden = true;
+});
 
 // ---------------------------------------------------------------------------
 // Sign-in with token modal

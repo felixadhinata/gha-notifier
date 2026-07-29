@@ -7,10 +7,12 @@ import {
   addRepo,
   DEFAULT_CONFIG,
   getRepos,
+  getWorkflowFilter,
   loadConfig,
   removeRepo,
   saveConfig,
   setOpenOnStartup,
+  setWorkflowFilter,
   type Theme,
 } from "./config";
 import { GitHubClient, type GithubRun } from "./github";
@@ -307,6 +309,16 @@ ipcMain.handle("repos:search-mine", async () => {
   }
 });
 
+ipcMain.handle("workflow-filter:get", (_event, repoKey: string) => ({
+  workflows: getWorkflowFilter(config, repoKey),
+}));
+
+ipcMain.handle("workflow-filter:set", (_event, repoKey: string, workflows: string[]) => {
+  setWorkflowFilter(config, repoKey, workflows);
+  saveConfig(config);
+  return { ok: true };
+});
+
 ipcMain.handle("settings:get", () => ({
   pollIntervalSec: config.pollIntervalSec,
   notifyEnabled: config.notifyEnabled,
@@ -338,6 +350,7 @@ ipcMain.handle("shell:open-external", (_event, url: string) => shell.openExterna
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
+  setOpenOnStartup(config.openOnStartup, getAutostartExecCommand());
   createWindow();
   setupTray();
   startPolling();
