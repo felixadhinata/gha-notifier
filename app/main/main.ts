@@ -58,9 +58,21 @@ function isRunInProgress(run: GithubRun): boolean {
   return status === "in_progress" || status === "queued";
 }
 
+/** Same "which workflows to notify for" filter also decides what the tray tracks/shows. */
+function matchesTrayFilter(repoKey: string, run: GithubRun): boolean {
+  const filter = getWorkflowFilter(config, repoKey);
+  if (filter.length === 0) return true;
+  return filter.includes(run.name || "Workflow");
+}
+
 function updateTrayWatches(): void {
   for (const repoKey of getRepos(config)) {
     for (const run of runsByRepo[repoKey] || []) {
+      if (!matchesTrayFilter(repoKey, run)) {
+        // Filter narrowed after this run was already tracked: drop it.
+        trayWatches.delete(run.id);
+        continue;
+      }
       const existing = trayWatches.get(run.id);
       if (existing) {
         existing.run = run;
@@ -125,10 +137,13 @@ function pickOverallStatus(): RepoStatus {
   return "green";
 }
 
-function rebuildTrayMenu(): void {
-  if (!tray) return;
-  tray.setImage(nativeImage.createFromPath(trayIconPath(pickOverallStatus())));
+// Tracks whether the tray's popup menu is currently open, so a poll-triggered rebuild
+// doesn't yank the menu out from under the user mid-click by replacing it while it's
+// showing. Instead, the rebuild is deferred until the menu actually closes.
+let trayMenuOpen = false;
+let trayMenuRebuildPending = false;
 
+function buildTrayMenuTemplate(): Electron.MenuItemConstructorOptions[] {
   const byRepo = new Map<string, TrayWatchEntry[]>();
   for (const entry of trayWatches.values()) {
     let entries = byRepo.get(entry.repoKey);
@@ -189,7 +204,30 @@ function rebuildTrayMenu(): void {
       },
     },
   );
-  tray.setContextMenu(Menu.buildFromTemplate(template));
+  return template;
+}
+
+function rebuildTrayMenu(): void {
+  if (!tray) return;
+  tray.setImage(nativeImage.createFromPath(trayIconPath(pickOverallStatus())));
+
+  if (trayMenuOpen) {
+    trayMenuRebuildPending = true;
+    return;
+  }
+
+  const menu = Menu.buildFromTemplate(buildTrayMenuTemplate());
+  menu.on("menu-will-show", () => {
+    trayMenuOpen = true;
+  });
+  menu.on("menu-will-close", () => {
+    trayMenuOpen = false;
+    if (trayMenuRebuildPending) {
+      trayMenuRebuildPending = false;
+      rebuildTrayMenu();
+    }
+  });
+  tray.setContextMenu(menu);
 }
 
 function setupTray(): void {
