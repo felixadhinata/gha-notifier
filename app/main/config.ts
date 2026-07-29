@@ -11,7 +11,7 @@ export interface GithubUser {
 }
 
 export type Theme = "system" | "light" | "dark";
-export type NotificationSound = "none" | "default" | "chime" | "ping";
+export type NotificationSound = "none" | "default" | "chime" | "ping" | "bell" | "pop" | "alert";
 
 export interface AppConfig {
   pollIntervalSec: number;

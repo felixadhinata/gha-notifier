@@ -20,7 +20,7 @@ interface GithubUser {
 }
 
 type Theme = "system" | "light" | "dark";
-type NotificationSound = "none" | "default" | "chime" | "ping";
+type NotificationSound = "none" | "default" | "chime" | "ping" | "bell" | "pop" | "alert";
 
 interface Settings {
   pollIntervalSec: number;
@@ -741,6 +741,9 @@ const SOUND_FILES: Record<Exclude<NotificationSound, "none">, string> = {
   default: "sounds/default.wav",
   chime: "sounds/chime.wav",
   ping: "sounds/ping.wav",
+  bell: "sounds/bell.wav",
+  pop: "sounds/pop.wav",
+  alert: "sounds/alert.wav",
 };
 
 function playNotificationSound(sound: NotificationSound): void {
