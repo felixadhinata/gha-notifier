@@ -64,6 +64,12 @@ fi
 
 NOTES="GHA Notifier ${VERSION}: Electron + TypeScript rewrite of the repo-only workflow-run notifier — auto-watch runs you triggered, tray notifications with a watch list, runs table with pagination/filters, System/Light/Dark theme, Biome-linted CI. See the .deb asset below to install.
 
+New in 2.2.0:
+- Tray menu (and icon color) now respects the workflow notification filter, instead of tracking every run regardless of subscription
+- Fixed the tray's popup menu closing itself every ~10s while open, and submenu flyouts (a repo's run list) closing prematurely on top of that
+- Settings has a \"Send test notification\" button so you can verify notifications work without waiting for a real run
+- Notification sound is now app-controlled (bundled tones played directly), with 7 options: No sound, Default, Chime, Ping, Bell, Pop, Alert — reliable regardless of the desktop's own notification-sound config
+
 New in 2.1.0:
 - Per-repo workflow notification filter: pick which workflows to get desktop notifications for (pillbox + themed dropdown next to Refresh); leave empty to notify for all
 - The runs table now filters by the same selected workflows, live
