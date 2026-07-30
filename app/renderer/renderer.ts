@@ -54,7 +54,6 @@ interface GhaApi {
   saveSettings(settings: Settings): Promise<{ ok: boolean }>;
   getVersion(): Promise<string>;
   sendTestNotification(sound: NotificationSound): Promise<{ ok: boolean }>;
-  setNotificationSound(sound: NotificationSound): Promise<{ ok: boolean }>;
 
   getWorkflowFilter(repoKey: string): Promise<{ workflows: string[] }>;
   setWorkflowFilter(repoKey: string, workflows: string[]): Promise<{ ok: boolean }>;
@@ -812,13 +811,6 @@ function updateTestNotificationVisibility(): void {
 }
 
 settingsNotify.addEventListener("change", updateTestNotificationVisibility);
-
-// Saved the moment it's picked, independent of Apply — otherwise closing the modal via
-// Cancel/backdrop-click silently discards the choice, even though the test button next
-// to it always plays whatever's currently selected (making that look "applied" too).
-settingsSound.addEventListener("change", () => {
-  void gha.setNotificationSound(settingsSound.value as NotificationSound);
-});
 
 function applyTheme(theme: Theme): void {
   if (theme === "system") {

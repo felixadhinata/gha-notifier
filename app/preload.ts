@@ -28,7 +28,6 @@ export interface GhaApi {
   saveSettings(settings: Settings): Promise<{ ok: boolean }>;
   getVersion(): Promise<string>;
   sendTestNotification(sound: NotificationSound): Promise<{ ok: boolean }>;
-  setNotificationSound(sound: NotificationSound): Promise<{ ok: boolean }>;
 
   getWorkflowFilter(repoKey: string): Promise<{ workflows: string[] }>;
   setWorkflowFilter(repoKey: string, workflows: string[]): Promise<{ ok: boolean }>;
@@ -54,7 +53,6 @@ const api: GhaApi = {
   saveSettings: (settings) => ipcRenderer.invoke("settings:save", settings),
   getVersion: () => ipcRenderer.invoke("app:get-version"),
   sendTestNotification: (sound) => ipcRenderer.invoke("notifications:test", sound),
-  setNotificationSound: (sound) => ipcRenderer.invoke("notifications:set-sound", sound),
 
   getWorkflowFilter: (repoKey) => ipcRenderer.invoke("workflow-filter:get", repoKey),
   setWorkflowFilter: (repoKey, workflows) => ipcRenderer.invoke("workflow-filter:set", repoKey, workflows),

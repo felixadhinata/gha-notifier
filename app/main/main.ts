@@ -411,15 +411,6 @@ ipcMain.handle("notifications:test", (_event, sound: NotificationSound) => {
   return { ok: true };
 });
 
-// Saved immediately on selection (not gated behind Settings' Apply button) so a sound
-// choice can't be silently discarded by closing the modal via Cancel/backdrop-click —
-// matches "Send test notification", which already always plays the current selection.
-ipcMain.handle("notifications:set-sound", (_event, sound: NotificationSound) => {
-  config.notificationSound = sound;
-  saveConfig(config);
-  return { ok: true };
-});
-
 ipcMain.handle(
   "settings:save",
   (
